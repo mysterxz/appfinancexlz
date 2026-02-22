@@ -70,10 +70,10 @@ export default function Relatorios() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Relatórios</h1>
-          <p className="text-muted-foreground">Análise financeira detalhada</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Relatórios</h1>
+          <p className="text-sm text-muted-foreground">Análise financeira detalhada</p>
         </div>
         <div className="flex items-center gap-3">
           <Select value={ano} onValueChange={setAno}>
@@ -91,19 +91,19 @@ export default function Relatorios() {
         <Card className="border-success/20 bg-success/5 shadow-card">
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1"><TrendingUp className="w-4 h-4 text-success" />Total Receitas {ano}</div>
-            <p className="text-2xl font-bold text-success">{formatCurrency(totais.receitas)}</p>
+            <p className="text-xl sm:text-2xl font-bold text-success">{formatCurrency(totais.receitas)}</p>
           </CardContent>
         </Card>
         <Card className="border-destructive/20 bg-destructive/5 shadow-card">
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1"><TrendingDown className="w-4 h-4 text-destructive" />Total Despesas {ano}</div>
-            <p className="text-2xl font-bold text-destructive">{formatCurrency(totais.despesas)}</p>
+            <p className="text-xl sm:text-2xl font-bold text-destructive">{formatCurrency(totais.despesas)}</p>
           </CardContent>
         </Card>
         <Card className={`shadow-card border-${totais.saldo>=0?"success":"destructive"}/20 bg-${totais.saldo>=0?"success":"destructive"}/5`}>
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1"><BarChart2 className="w-4 h-4" />Saldo Anual</div>
-            <p className={`text-2xl font-bold ${totais.saldo>=0?"text-success":"text-destructive"}`}>{formatCurrency(totais.saldo)}</p>
+            <p className={`text-xl sm:text-2xl font-bold ${totais.saldo>=0?"text-success":"text-destructive"}`}>{formatCurrency(totais.saldo)}</p>
           </CardContent>
         </Card>
       </div>

@@ -122,7 +122,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground">
           Resumo financeiro de {new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}
         </p>
@@ -141,7 +141,7 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={cn("text-3xl font-bold", saldoPositivo ? "text-success" : "text-destructive")}>
+            <p className={cn("text-2xl sm:text-3xl font-bold", saldoPositivo ? "text-success" : "text-destructive")}>
               {formatCurrency(stats.saldo)}
             </p>
             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
@@ -159,7 +159,7 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-success">{formatCurrency(stats.totalReceitas)}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-success">{formatCurrency(stats.totalReceitas)}</p>
             <p className="text-xs text-muted-foreground mt-1">Total do mês</p>
           </CardContent>
         </Card>
@@ -172,7 +172,7 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-destructive">{formatCurrency(stats.totalDespesas)}</p>
+            <p className="text-2xl sm:text-3xl font-bold text-destructive">{formatCurrency(stats.totalDespesas)}</p>
             <p className="text-xs text-muted-foreground mt-1">Total do mês</p>
           </CardContent>
         </Card>
