@@ -235,26 +235,40 @@ export default function Despesas() {
           ) : (
             <div className="space-y-2">
               {expenses.map(e => (
-                <div key={e.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-smooth group">
-                  <div className="w-9 h-9 rounded-full bg-destructive/20 flex items-center justify-center flex-shrink-0">
+                <div key={e.id} className="flex items-start sm:items-center gap-3 p-3 rounded-lg hover:bg-secondary/50 transition-smooth group">
+                  <div className="w-9 h-9 rounded-full bg-destructive/20 flex items-center justify-center flex-shrink-0 mt-0.5 sm:mt-0">
                     <TrendingDown className="w-4 h-4 text-destructive" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{e.titulo}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Badge variant="secondary" className="text-xs py-0">{e.categoria}</Badge>
-                      {e.parcelado && <Badge variant="outline" className="text-xs py-0">{e.parcela_atual}/{e.parcelas}x</Badge>}
-                      <span className="text-xs text-muted-foreground">{new Date(e.data + "T00:00:00").toLocaleDateString("pt-BR")}</span>
+                    <div className="flex items-start sm:items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground truncate">{e.titulo}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <p className="text-sm font-bold text-destructive whitespace-nowrap">{formatCurrency(e.valor)}</p>
+                        <div className="hidden sm:flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-smooth">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)}>
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(e.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <p className="text-sm font-bold text-destructive mr-1 sm:mr-2 whitespace-nowrap">{formatCurrency(e.valor)}</p>
-                  <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-smooth">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={() => openEdit(e)}>
-                      <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive" onClick={() => handleDelete(e.id)}>
-                      <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                    </Button>
+                    <div className="flex items-center justify-between mt-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs py-0">{e.categoria}</Badge>
+                        {e.parcelado && <Badge variant="outline" className="text-xs py-0">{e.parcela_atual}/{e.parcelas}x</Badge>}
+                        <span className="text-xs text-muted-foreground">{new Date(e.data + "T00:00:00").toLocaleDateString("pt-BR")}</span>
+                      </div>
+                      <div className="flex sm:hidden gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(e)}>
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(e.id)}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
