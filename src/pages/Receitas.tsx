@@ -84,10 +84,10 @@ export default function Receitas() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Receitas</h1>
-          <p className="text-muted-foreground">Gerencie suas receitas</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Receitas</h1>
+          <p className="text-sm text-muted-foreground">Gerencie suas receitas</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if(!open){resetForm();setEditingId(null);} }}>
           <DialogTrigger asChild>
@@ -128,14 +128,14 @@ export default function Receitas() {
 
       <Card className="shadow-card">
         <CardContent className="pt-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <Filter className="w-4 h-4 text-muted-foreground" />
+          <div className="flex flex-wrap gap-2 sm:gap-3 items-center">
+            <Filter className="w-4 h-4 text-muted-foreground hidden sm:block" />
             <Select value={filterMes} onValueChange={setFilterMes}>
-              <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-24 sm:w-32"><SelectValue /></SelectTrigger>
               <SelectContent>{meses.map((m,i)=><SelectItem key={i} value={String(i+1)}>{m}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={filterAno} onValueChange={setFilterAno}>
-              <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-24 sm:w-28"><SelectValue /></SelectTrigger>
               <SelectContent>{[2023,2024,2025,2026].map(y=><SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
             </Select>
             <div className="ml-auto flex items-center gap-2">
@@ -169,10 +169,10 @@ export default function Receitas() {
                       <span className="text-xs text-muted-foreground">{new Date(r.data+"T00:00:00").toLocaleDateString("pt-BR")}</span>
                     </div>
                   </div>
-                  <p className="text-sm font-bold text-success mr-2">+{formatCurrency(r.valor)}</p>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-smooth">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={()=>openEdit(r)}><Pencil className="w-3.5 h-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={()=>handleDelete(r.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                  <p className="text-sm font-bold text-success mr-1 sm:mr-2 whitespace-nowrap">+{formatCurrency(r.valor)}</p>
+                  <div className="flex gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-smooth">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" onClick={()=>openEdit(r)}><Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-destructive hover:text-destructive" onClick={()=>handleDelete(r.id)}><Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" /></Button>
                   </div>
                 </div>
               ))}

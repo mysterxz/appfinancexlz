@@ -87,8 +87,8 @@ export default function Contas() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Contas & Cartões</h1>
-        <p className="text-muted-foreground">Gerencie suas contas e cartões de crédito</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Contas & Cartões</h1>
+        <p className="text-sm text-muted-foreground">Gerencie suas contas e cartões de crédito</p>
       </div>
 
       <Tabs defaultValue="contas">
