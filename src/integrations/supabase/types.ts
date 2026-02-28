@@ -242,6 +242,48 @@ export type Database = {
         }
         Relationships: []
       }
+      saldo_mensal: {
+        Row: {
+          ano: number
+          created_at: string
+          id: string
+          mes: number
+          nome_caixinha: string | null
+          status: string
+          total_despesas: number
+          total_receitas: number
+          updated_at: string
+          user_id: string
+          valor: number
+        }
+        Insert: {
+          ano: number
+          created_at?: string
+          id?: string
+          mes: number
+          nome_caixinha?: string | null
+          status?: string
+          total_despesas?: number
+          total_receitas?: number
+          updated_at?: string
+          user_id: string
+          valor?: number
+        }
+        Update: {
+          ano?: number
+          created_at?: string
+          id?: string
+          mes?: number
+          nome_caixinha?: string | null
+          status?: string
+          total_despesas?: number
+          total_receitas?: number
+          updated_at?: string
+          user_id?: string
+          valor?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
