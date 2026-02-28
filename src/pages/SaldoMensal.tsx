@@ -13,8 +13,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Wallet, PiggyBank, ShoppingBag, AlertTriangle, CheckCircle2,
-  Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, RefreshCw
+  Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, RefreshCw, Trash2
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface SaldoMensalRecord {
   id: string;
@@ -46,6 +47,8 @@ export default function SaldoMensal() {
   const [nomeCaixinha, setNomeCaixinha] = useState("");
   const [metas, setMetas] = useState<Array<{ id: string; nome: string }>>([]);
   const [metaSelecionada, setMetaSelecionada] = useState<string>("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<SaldoMensalRecord | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -180,6 +183,17 @@ export default function SaldoMensal() {
     fetchRegistros();
   };
 
+  const handleDelete = async () => {
+    if (!recordToDelete) return;
+    await supabase.from("saldo_mensal").delete().eq("id", recordToDelete.id);
+    toast.success("Saldo excluído com sucesso!");
+    setDeleteDialogOpen(false);
+    setRecordToDelete(null);
+    fetchRegistros();
+  };
+
+  const { mes: mesAtual, ano: anoAtual } = getCurrentMonth();
+
   const getStatusBadge = (status: string, valor: number) => {
     if (valor < 0) return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" /> Déficit</Badge>;
     switch (status) {
@@ -273,11 +287,23 @@ export default function SaldoMensal() {
 
                       <div className="flex flex-col items-end gap-2">
                         {getStatusBadge(r.status, r.valor)}
-                        {r.status === "pendente" && r.valor > 0 && (
-                          <Button size="sm" variant="outline" onClick={() => handleAcao(r)} className="text-xs">
-                            Decidir
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {r.status === "pendente" && r.valor > 0 && (
+                            <Button size="sm" variant="outline" onClick={() => handleAcao(r)} className="text-xs">
+                              Decidir
+                            </Button>
+                          )}
+                          {r.mes === mesAtual && r.ano === anoAtual && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => { setRecordToDelete(r); setDeleteDialogOpen(true); }}
+                              className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 px-2"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
                         {r.nome_caixinha && (
                           <span className="text-xs text-muted-foreground">🏦 {r.nome_caixinha}</span>
                         )}
@@ -368,6 +394,26 @@ export default function SaldoMensal() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de confirmação de exclusão */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir saldo do mês?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação irá remover o registro de saldo de{" "}
+              {recordToDelete ? `${MONTH_NAMES[recordToDelete.mes - 1]}/${recordToDelete.ano}` : ""}. 
+              Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
