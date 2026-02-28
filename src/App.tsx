@@ -13,6 +13,7 @@ import Receitas from "./pages/Receitas";
 import Metas from "./pages/Metas";
 import Contas from "./pages/Contas";
 import Relatorios from "./pages/Relatorios";
+import SaldoMensal from "./pages/SaldoMensal";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="/receitas" element={<Receitas />} />
         <Route path="/metas" element={<Metas />} />
         <Route path="/contas" element={<Contas />} />
+        <Route path="/saldo-mensal" element={<SaldoMensal />} />
         <Route path="/relatorios" element={<Relatorios />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

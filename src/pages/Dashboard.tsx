@@ -7,9 +7,17 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, AlertCircle, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, AlertCircle, ArrowUpRight, ArrowDownRight, CheckCircle2, PiggyBank, ShoppingBag } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CATEGORY_COLORS } from "@/lib/supabase";
+
+interface SaldoMensalInfo {
+  status: string;
+  valor: number;
+  nome_caixinha: string | null;
+}
 
 interface DashboardStats {
   saldo: number;
@@ -21,13 +29,16 @@ interface DashboardStats {
   }>;
   receitasPorMes: Array<{ mes: string; receitas: number; despesas: number }>;
   despesasPorCategoria: Array<{ name: string; value: number }>;
+  saldoMesAnterior: number | null;
+  saldoMensalInfo: SaldoMensalInfo | null;
 }
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     saldo: 0, totalReceitas: 0, totalDespesas: 0,
-    ultimasTransacoes: [], receitasPorMes: [], despesasPorCategoria: []
+    ultimasTransacoes: [], receitasPorMes: [], despesasPorCategoria: [],
+    saldoMesAnterior: null, saldoMensalInfo: null
   });
   const [loading, setLoading] = useState(true);
   const { mes, ano } = getCurrentMonth();
@@ -83,7 +94,31 @@ export default function Dashboard() {
     // Gráfico últimos 6 meses
     const receitasPorMes = await getMonthlyData(userId);
 
-    setStats({ saldo, totalReceitas, totalDespesas, ultimasTransacoes, receitasPorMes, despesasPorCategoria });
+    // Saldo mensal info
+    const { data: saldoData } = await supabase
+      .from("saldo_mensal")
+      .select("status, valor, nome_caixinha")
+      .eq("user_id", userId)
+      .eq("mes", mes)
+      .eq("ano", ano)
+      .maybeSingle();
+
+    // Saldo mês anterior
+    const prevMonth = mes === 1 ? 12 : mes - 1;
+    const prevYear = mes === 1 ? ano - 1 : ano;
+    const { data: prevData } = await supabase
+      .from("saldo_mensal")
+      .select("valor")
+      .eq("user_id", userId)
+      .eq("mes", prevMonth)
+      .eq("ano", prevYear)
+      .maybeSingle();
+
+    setStats({
+      saldo, totalReceitas, totalDespesas, ultimasTransacoes, receitasPorMes, despesasPorCategoria,
+      saldoMensalInfo: saldoData as SaldoMensalInfo | null,
+      saldoMesAnterior: prevData ? Number(prevData.valor) : null,
+    });
     setLoading(false);
   };
 
@@ -177,6 +212,51 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Indicador de mês encerrado */}
+      {stats.saldoMensalInfo && (
+        <Card className={cn(
+          "shadow-card border-2",
+          stats.saldoMensalInfo.status === "guardado" ? "border-success/30 bg-success/5" :
+          stats.saldoMensalInfo.status === "gasto" ? "border-muted-foreground/20" :
+          "border-primary/30 bg-primary/5"
+        )}>
+          <CardContent className="p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-3 flex-1">
+                {stats.saldoMensalInfo.status !== "pendente" ? (
+                  <CheckCircle2 className="w-6 h-6 text-success flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-6 h-6 text-primary flex-shrink-0" />
+                )}
+                <div>
+                  <p className="font-semibold text-foreground">
+                    {stats.saldoMensalInfo.status !== "pendente" ? "✅ Mês encerrado" : "Saldo pendente de decisão"}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    {stats.saldoMensalInfo.status === "guardado" && (
+                      <Badge className="gap-1 bg-success/20 text-success border-success/30">
+                        <PiggyBank className="w-3 h-3" /> Guardado{stats.saldoMensalInfo.nome_caixinha ? ` em ${stats.saldoMensalInfo.nome_caixinha}` : ""}
+                      </Badge>
+                    )}
+                    {stats.saldoMensalInfo.status === "gasto" && (
+                      <Badge variant="outline" className="gap-1"><ShoppingBag className="w-3 h-3" /> Gasto</Badge>
+                    )}
+                    {stats.saldoMesAnterior !== null && (
+                      <span className={cn("text-xs", stats.saldo >= stats.saldoMesAnterior ? "text-success" : "text-destructive")}>
+                        {stats.saldo >= stats.saldoMesAnterior ? "↑" : "↓"} {formatCurrency(Math.abs(stats.saldo - stats.saldoMesAnterior))} vs mês anterior
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <Link to="/saldo-mensal">
+                <Badge variant="secondary" className="cursor-pointer hover:bg-accent">Ver histórico →</Badge>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Gráfico de área */}

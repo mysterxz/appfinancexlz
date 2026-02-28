@@ -15,6 +15,7 @@ const navItems = [
   { path: "/receitas", label: "Receitas", icon: TrendingUp },
   { path: "/metas", label: "Metas", icon: Target },
   { path: "/contas", label: "Contas & Cartões", icon: Wallet },
+  { path: "/saldo-mensal", label: "Saldo Mensal", icon: CreditCard },
   { path: "/relatorios", label: "Relatórios", icon: BarChart2 },
 ];
 
