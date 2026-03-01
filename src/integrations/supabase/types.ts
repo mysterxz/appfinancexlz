@@ -247,8 +247,11 @@ export type Database = {
           ano: number
           created_at: string
           id: string
+          locked: boolean
           mes: number
           nome_caixinha: string | null
+          saldo_final: number
+          saldo_inicial: number
           status: string
           total_despesas: number
           total_receitas: number
@@ -260,8 +263,11 @@ export type Database = {
           ano: number
           created_at?: string
           id?: string
+          locked?: boolean
           mes: number
           nome_caixinha?: string | null
+          saldo_final?: number
+          saldo_inicial?: number
           status?: string
           total_despesas?: number
           total_receitas?: number
@@ -273,8 +279,11 @@ export type Database = {
           ano?: number
           created_at?: string
           id?: string
+          locked?: boolean
           mes?: number
           nome_caixinha?: string | null
+          saldo_final?: number
+          saldo_inicial?: number
           status?: string
           total_despesas?: number
           total_receitas?: number

@@ -7,7 +7,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend
 } from "recharts";
-import { TrendingUp, TrendingDown, Wallet, AlertCircle, ArrowUpRight, ArrowDownRight, CheckCircle2, PiggyBank, ShoppingBag } from "lucide-react";
+import { TrendingUp, TrendingDown, Wallet, AlertCircle, ArrowUpRight, ArrowDownRight, CheckCircle2, PiggyBank, ShoppingBag, BarChart3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -16,13 +16,16 @@ import { CATEGORY_COLORS } from "@/lib/supabase";
 interface SaldoMensalInfo {
   status: string;
   valor: number;
+  saldo_final: number;
   nome_caixinha: string | null;
 }
 
 interface DashboardStats {
-  saldo: number;
+  saldoDisponivel: number;
+  resultadoMes: number;
   totalReceitas: number;
   totalDespesas: number;
+  saldoInicial: number;
   ultimasTransacoes: Array<{
     id: string; titulo: string; valor: number; tipo: "receita" | "despesa";
     categoria: string; data: string;
@@ -36,7 +39,7 @@ interface DashboardStats {
 export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
-    saldo: 0, totalReceitas: 0, totalDespesas: 0,
+    saldoDisponivel: 0, resultadoMes: 0, totalReceitas: 0, totalDespesas: 0, saldoInicial: 0,
     ultimasTransacoes: [], receitasPorMes: [], despesasPorCategoria: [],
     saldoMesAnterior: null, saldoMensalInfo: null
   });
@@ -45,34 +48,43 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) {
-      fetchDashboard();
-      autoGeneratePreviousMonthSaldo();
+      autoGeneratePreviousMonthSaldo().then(() => fetchDashboard());
     }
   }, [user]);
+
+  const getSaldoInicialDoMes = async (userId: string, mes: number, ano: number): Promise<number> => {
+    // Get previous month's saldo_final
+    const prevMonth = mes === 1 ? 12 : mes - 1;
+    const prevYear = mes === 1 ? ano - 1 : ano;
+    const { data } = await supabase
+      .from("saldo_mensal")
+      .select("saldo_final")
+      .eq("user_id", userId)
+      .eq("mes", prevMonth)
+      .eq("ano", prevYear)
+      .maybeSingle();
+    return data ? Number(data.saldo_final) : 0;
+  };
 
   const fetchDashboard = async () => {
     setLoading(true);
     const userId = user!.id;
+    const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
 
-    // Receitas do mês
-    const { data: incomeData } = await supabase
-      .from("income")
-      .select("*")
-      .eq("user_id", userId)
-      .gte("data", `${ano}-${String(mes).padStart(2, "0")}-01`)
-      .lt("data", mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`);
-
-    // Despesas do mês
-    const { data: expensesData } = await supabase
-      .from("expenses")
-      .select("*")
-      .eq("user_id", userId)
-      .gte("data", `${ano}-${String(mes).padStart(2, "0")}-01`)
-      .lt("data", mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`);
+    // Receitas e despesas do mês
+    const [{ data: incomeData }, { data: expensesData }] = await Promise.all([
+      supabase.from("income").select("*").eq("user_id", userId).gte("data", startDate).lt("data", endDate),
+      supabase.from("expenses").select("*").eq("user_id", userId).gte("data", startDate).lt("data", endDate),
+    ]);
 
     const totalReceitas = (incomeData || []).reduce((sum, r) => sum + Number(r.valor), 0);
     const totalDespesas = (expensesData || []).reduce((sum, e) => sum + Number(e.valor), 0);
-    const saldo = totalReceitas - totalDespesas;
+    const resultadoMes = totalReceitas - totalDespesas;
+
+    // Saldo inicial (herdado do mês anterior)
+    const saldoInicial = await getSaldoInicialDoMes(userId, mes, ano);
+    const saldoDisponivel = saldoInicial + totalReceitas - totalDespesas;
 
     // Últimas transações
     const transacoesReceitas = (incomeData || []).map(r => ({
@@ -97,35 +109,35 @@ export default function Dashboard() {
     // Gráfico últimos 6 meses
     const receitasPorMes = await getMonthlyData(userId);
 
-    // Saldo mensal info
+    // Saldo mensal info do mês atual
     const { data: saldoData } = await supabase
       .from("saldo_mensal")
-      .select("status, valor, nome_caixinha")
+      .select("status, valor, saldo_final, nome_caixinha")
       .eq("user_id", userId)
       .eq("mes", mes)
       .eq("ano", ano)
       .maybeSingle();
 
-    // Saldo mês anterior
+    // Saldo mês anterior para comparação
     const prevMonth = mes === 1 ? 12 : mes - 1;
     const prevYear = mes === 1 ? ano - 1 : ano;
     const { data: prevData } = await supabase
       .from("saldo_mensal")
-      .select("valor")
+      .select("saldo_final")
       .eq("user_id", userId)
       .eq("mes", prevMonth)
       .eq("ano", prevYear)
       .maybeSingle();
 
     setStats({
-      saldo, totalReceitas, totalDespesas, ultimasTransacoes, receitasPorMes, despesasPorCategoria,
+      saldoDisponivel, resultadoMes, totalReceitas, totalDespesas, saldoInicial,
+      ultimasTransacoes, receitasPorMes, despesasPorCategoria,
       saldoMensalInfo: saldoData as SaldoMensalInfo | null,
-      saldoMesAnterior: prevData ? Number(prevData.valor) : null,
+      saldoMesAnterior: prevData ? Number(prevData.saldo_final) : null,
     });
     setLoading(false);
   };
 
-  // Auto-generate previous month's saldo if it doesn't exist yet
   const autoGeneratePreviousMonthSaldo = async () => {
     const userId = user!.id;
     const prevMonth = mes === 1 ? 12 : mes - 1;
@@ -133,35 +145,37 @@ export default function Dashboard() {
 
     const { data: existing } = await supabase
       .from("saldo_mensal")
-      .select("id")
+      .select("id, locked")
       .eq("user_id", userId)
       .eq("mes", prevMonth)
       .eq("ano", prevYear)
       .maybeSingle();
 
-    // If already exists, do NOT touch it
     if (existing) return;
 
-    // Calculate previous month totals
     const start = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
     const end = prevMonth === 12 ? `${prevYear + 1}-01-01` : `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-01`;
 
-    const { data: incomeData } = await supabase
-      .from("income").select("valor").eq("user_id", userId).gte("data", start).lt("data", end);
-    const { data: expensesData } = await supabase
-      .from("expenses").select("valor").eq("user_id", userId).gte("data", start).lt("data", end);
+    const [{ data: incomeData }, { data: expensesData }] = await Promise.all([
+      supabase.from("income").select("valor").eq("user_id", userId).gte("data", start).lt("data", end),
+      supabase.from("expenses").select("valor").eq("user_id", userId).gte("data", start).lt("data", end),
+    ]);
 
     const totalReceitas = (incomeData || []).reduce((s, r) => s + Number(r.valor), 0);
     const totalDespesas = (expensesData || []).reduce((s, e) => s + Number(e.valor), 0);
 
-    // Only create if there was any movement
     if (totalReceitas === 0 && totalDespesas === 0) return;
 
-    const valor = totalReceitas - totalDespesas;
+    // Get saldo_inicial for the previous month (from the month before it)
+    const saldoInicial = await getSaldoInicialDoMes(userId, prevMonth, prevYear);
+    const saldoFinal = saldoInicial + totalReceitas - totalDespesas;
+
     await supabase.from("saldo_mensal").insert({
       user_id: userId, mes: prevMonth, ano: prevYear,
       total_receitas: totalReceitas, total_despesas: totalDespesas,
-      valor, status: "pendente"
+      valor: totalReceitas - totalDespesas,
+      saldo_inicial: saldoInicial, saldo_final: saldoFinal,
+      status: "pendente", locked: false
     });
   };
 
@@ -175,8 +189,10 @@ export default function Dashboard() {
       const start = `${y}-${String(m).padStart(2, "0")}-01`;
       const end = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
 
-      const { data: inc } = await supabase.from("income").select("valor").eq("user_id", userId).gte("data", start).lt("data", end);
-      const { data: exp } = await supabase.from("expenses").select("valor").eq("user_id", userId).gte("data", start).lt("data", end);
+      const [{ data: inc }, { data: exp }] = await Promise.all([
+        supabase.from("income").select("valor").eq("user_id", userId).gte("data", start).lt("data", end),
+        supabase.from("expenses").select("valor").eq("user_id", userId).gte("data", start).lt("data", end),
+      ]);
 
       months.push({
         mes: d.toLocaleDateString("pt-BR", { month: "short" }),
@@ -195,7 +211,8 @@ export default function Dashboard() {
     );
   }
 
-  const saldoPositivo = stats.saldo >= 0;
+  const saldoPositivo = stats.saldoDisponivel >= 0;
+  const resultadoPositivo = stats.resultadoMes >= 0;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -206,8 +223,9 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Cards principais */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* 4 Cards principais */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Saldo Disponível */}
         <Card className={cn(
           "border-2 shadow-card transition-smooth hover:scale-[1.02]",
           saldoPositivo ? "border-success/30 bg-success/5" : "border-destructive/30 bg-destructive/5"
@@ -215,25 +233,52 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Wallet className="w-4 h-4" />
-              Saldo do Mês
+              Saldo Disponível
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className={cn("text-2xl sm:text-3xl font-bold", saldoPositivo ? "text-success" : "text-destructive")}>
-              {formatCurrency(stats.saldo)}
+              {formatCurrency(stats.saldoDisponivel)}
             </p>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              {saldoPositivo ? <ArrowUpRight className="w-3 h-3 text-success" /> : <AlertCircle className="w-3 h-3 text-destructive" />}
-              {saldoPositivo ? "Saldo positivo" : "Saldo negativo"}
+            {stats.saldoInicial > 0 && (
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                <ArrowUpRight className="w-3 h-3 text-success" />
+                {formatCurrency(stats.saldoInicial)} acumulado
+              </p>
+            )}
+            {stats.saldoInicial === 0 && (
+              <p className="text-xs text-muted-foreground mt-1">Valor real disponível</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Resultado do Mês */}
+        <Card className={cn(
+          "border-2 shadow-card transition-smooth hover:scale-[1.02]",
+          resultadoPositivo ? "border-primary/20 bg-primary/5" : "border-destructive/20 bg-destructive/5"
+        )}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Resultado do Mês
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={cn("text-2xl sm:text-3xl font-bold", resultadoPositivo ? "text-success" : "text-destructive")}>
+              {formatCurrency(stats.resultadoMes)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {resultadoPositivo ? "Receitas > Despesas" : "Despesas > Receitas"}
             </p>
           </CardContent>
         </Card>
 
+        {/* Receitas */}
         <Card className="border-success/20 bg-success/5 shadow-card transition-smooth hover:scale-[1.02]">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-success" />
-              Receitas
+              Receitas do Mês
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -242,11 +287,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* Despesas */}
         <Card className="border-destructive/20 bg-destructive/5 shadow-card transition-smooth hover:scale-[1.02]">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <TrendingDown className="w-4 h-4 text-destructive" />
-              Despesas
+              Despesas do Mês
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -286,8 +332,8 @@ export default function Dashboard() {
                       <Badge variant="outline" className="gap-1"><ShoppingBag className="w-3 h-3" /> Gasto</Badge>
                     )}
                     {stats.saldoMesAnterior !== null && (
-                      <span className={cn("text-xs", stats.saldo >= stats.saldoMesAnterior ? "text-success" : "text-destructive")}>
-                        {stats.saldo >= stats.saldoMesAnterior ? "↑" : "↓"} {formatCurrency(Math.abs(stats.saldo - stats.saldoMesAnterior))} vs mês anterior
+                      <span className={cn("text-xs", stats.saldoDisponivel >= stats.saldoMesAnterior ? "text-success" : "text-destructive")}>
+                        {stats.saldoDisponivel >= stats.saldoMesAnterior ? "↑" : "↓"} {formatCurrency(Math.abs(stats.saldoDisponivel - stats.saldoMesAnterior))} vs mês anterior
                       </span>
                     )}
                   </div>
@@ -301,8 +347,8 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* Charts section - keep existing */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Gráfico de área */}
         <Card className="lg:col-span-2 shadow-card">
           <CardHeader>
             <CardTitle className="text-base">Evolução dos Últimos 6 Meses</CardTitle>
@@ -334,7 +380,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Gráfico pizza */}
         <Card className="shadow-card">
           <CardHeader>
             <CardTitle className="text-base">Despesas por Categoria</CardTitle>
