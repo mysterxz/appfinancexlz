@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatCurrency, getCurrentMonth } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   Wallet, PiggyBank, ShoppingBag, AlertTriangle, CheckCircle2,
-  Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, RefreshCw, Trash2
+  Clock, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, RefreshCw, Trash2, Lock
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -22,10 +22,13 @@ interface SaldoMensalRecord {
   user_id: string;
   mes: number;
   ano: number;
+  saldo_inicial: number;
   total_receitas: number;
   total_despesas: number;
+  saldo_final: number;
   valor: number;
   status: string;
+  locked: boolean;
   nome_caixinha: string | null;
   created_at: string;
   updated_at: string;
@@ -77,57 +80,70 @@ export default function SaldoMensal() {
     setMetas(data || []);
   };
 
+  const getSaldoInicialDoMes = async (mes: number, ano: number): Promise<number> => {
+    const prevMonth = mes === 1 ? 12 : mes - 1;
+    const prevYear = mes === 1 ? ano - 1 : ano;
+    const { data } = await supabase
+      .from("saldo_mensal")
+      .select("saldo_final")
+      .eq("user_id", user!.id)
+      .eq("mes", prevMonth)
+      .eq("ano", prevYear)
+      .maybeSingle();
+    return data ? Number(data.saldo_final) : 0;
+  };
+
   const gerarSaldoMesAnterior = async () => {
     setGerando(true);
     const { mes: mesAtualRef, ano: anoAtualRef } = getCurrentMonth();
-    // Always generate for the PREVIOUS month
     const mesPrev = mesAtualRef === 1 ? 12 : mesAtualRef - 1;
     const anoPrev = mesAtualRef === 1 ? anoAtualRef - 1 : anoAtualRef;
     const userId = user!.id;
 
-    // Check if already exists
     const { data: existing } = await supabase
       .from("saldo_mensal")
-      .select("id, status")
+      .select("id, status, locked")
       .eq("user_id", userId)
       .eq("mes", mesPrev)
       .eq("ano", anoPrev)
       .maybeSingle();
 
-    // If already closed (guardado/gasto), do NOT recalculate
+    if (existing && existing.locked) {
+      toast.info("O saldo desse mês está bloqueado e não pode ser recalculado.");
+      setGerando(false);
+      return;
+    }
+
     if (existing && (existing.status === "guardado" || existing.status === "gasto")) {
       toast.info("O saldo desse mês já foi fechado e não pode ser recalculado.");
       setGerando(false);
       return;
     }
 
-    // Calculate totals for previous month
     const start = `${anoPrev}-${String(mesPrev).padStart(2, "0")}-01`;
     const end = mesPrev === 12 ? `${anoPrev + 1}-01-01` : `${anoPrev}-${String(mesPrev + 1).padStart(2, "0")}-01`;
 
-    const { data: incomeData } = await supabase
-      .from("income").select("valor").eq("user_id", userId)
-      .gte("data", start).lt("data", end);
-
-    const { data: expensesData } = await supabase
-      .from("expenses").select("valor").eq("user_id", userId)
-      .gte("data", start).lt("data", end);
+    const [{ data: incomeData }, { data: expensesData }] = await Promise.all([
+      supabase.from("income").select("valor").eq("user_id", userId).gte("data", start).lt("data", end),
+      supabase.from("expenses").select("valor").eq("user_id", userId).gte("data", start).lt("data", end),
+    ]);
 
     const totalReceitas = (incomeData || []).reduce((s, r) => s + Number(r.valor), 0);
     const totalDespesas = (expensesData || []).reduce((s, e) => s + Number(e.valor), 0);
+    const saldoInicial = await getSaldoInicialDoMes(mesPrev, anoPrev);
+    const saldoFinal = saldoInicial + totalReceitas - totalDespesas;
     const valor = totalReceitas - totalDespesas;
 
     if (existing) {
-      // Only update if still pendente
       await supabase
         .from("saldo_mensal")
-        .update({ total_receitas: totalReceitas, total_despesas: totalDespesas, valor })
+        .update({ total_receitas: totalReceitas, total_despesas: totalDespesas, valor, saldo_inicial: saldoInicial, saldo_final: saldoFinal })
         .eq("id", existing.id);
       toast.success(`Saldo de ${MONTH_NAMES[mesPrev - 1]}/${anoPrev} atualizado!`);
     } else {
       await supabase
         .from("saldo_mensal")
-        .insert({ user_id: userId, mes: mesPrev, ano: anoPrev, total_receitas: totalReceitas, total_despesas: totalDespesas, valor, status: "pendente" });
+        .insert({ user_id: userId, mes: mesPrev, ano: anoPrev, total_receitas: totalReceitas, total_despesas: totalDespesas, valor, saldo_inicial: saldoInicial, saldo_final: saldoFinal, status: "pendente", locked: false });
       toast.success(`Saldo de ${MONTH_NAMES[mesPrev - 1]}/${anoPrev} gerado!`);
     }
 
@@ -153,39 +169,34 @@ export default function SaldoMensal() {
         return;
       }
 
-      // If a goal was selected, update its valor_atual
       if (metaSelecionada) {
-        const meta = metas.find(m => m.id === metaSelecionada);
-        if (meta) {
-          const { data: goalData } = await supabase
-            .from("goals").select("valor_atual").eq("id", metaSelecionada).single();
-          if (goalData) {
-            await supabase
-              .from("goals")
-              .update({ valor_atual: Number(goalData.valor_atual) + selectedRecord.valor })
-              .eq("id", metaSelecionada);
-          }
+        const { data: goalData } = await supabase
+          .from("goals").select("valor_atual").eq("id", metaSelecionada).single();
+        if (goalData) {
+          await supabase
+            .from("goals")
+            .update({ valor_atual: Number(goalData.valor_atual) + selectedRecord.saldo_final })
+            .eq("id", metaSelecionada);
         }
       }
 
       await supabase
         .from("saldo_mensal")
-        .update({ status: "guardado", nome_caixinha: metaSelecionada ? metas.find(m => m.id === metaSelecionada)?.nome : nomeCaixinha })
+        .update({ status: "guardado", locked: true, nome_caixinha: metaSelecionada ? metas.find(m => m.id === metaSelecionada)?.nome : nomeCaixinha })
         .eq("id", selectedRecord.id);
       toast.success("Valor guardado com sucesso!");
     } else {
-      // Gastar - register as expense
       await supabase.from("expenses").insert({
         user_id: user!.id,
         titulo: `Saldo ${MONTH_NAMES[selectedRecord.mes - 1]}/${selectedRecord.ano}`,
-        valor: selectedRecord.valor,
+        valor: selectedRecord.saldo_final,
         categoria: "Outros",
         data: new Date().toISOString().split("T")[0],
       });
 
       await supabase
         .from("saldo_mensal")
-        .update({ status: "gasto" })
+        .update({ status: "gasto", locked: true })
         .eq("id", selectedRecord.id);
       toast.success("Valor registrado como gasto!");
     }
@@ -196,6 +207,11 @@ export default function SaldoMensal() {
 
   const handleDelete = async () => {
     if (!recordToDelete) return;
+    if (recordToDelete.locked) {
+      toast.error("Este saldo está bloqueado e não pode ser excluído.");
+      setDeleteDialogOpen(false);
+      return;
+    }
     await supabase.from("saldo_mensal").delete().eq("id", recordToDelete.id);
     toast.success("Saldo excluído com sucesso!");
     setDeleteDialogOpen(false);
@@ -205,13 +221,16 @@ export default function SaldoMensal() {
 
   const { mes: mesAtual, ano: anoAtual } = getCurrentMonth();
 
-  const getStatusBadge = (status: string, valor: number) => {
-    if (valor < 0) return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" /> Déficit</Badge>;
-    switch (status) {
+  const getStatusBadge = (record: SaldoMensalRecord) => {
+    if (record.locked) {
+      return <Badge className="gap-1 bg-muted text-muted-foreground"><Lock className="w-3 h-3" /> Bloqueado</Badge>;
+    }
+    if (record.saldo_final < 0) return <Badge variant="destructive" className="gap-1"><AlertTriangle className="w-3 h-3" /> Déficit</Badge>;
+    switch (record.status) {
       case "pendente": return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" /> Pendente</Badge>;
       case "guardado": return <Badge className="gap-1 bg-success/20 text-success border-success/30"><PiggyBank className="w-3 h-3" /> Guardado</Badge>;
       case "gasto": return <Badge variant="outline" className="gap-1"><ShoppingBag className="w-3 h-3" /> Gasto</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
+      default: return <Badge variant="secondary">{record.status}</Badge>;
     }
   };
 
@@ -248,26 +267,31 @@ export default function SaldoMensal() {
         <div className="grid gap-4">
           {registros.map((r, idx) => {
             const prevRecord = registros[idx + 1];
-            const diff = prevRecord ? r.valor - prevRecord.valor : null;
+            const diff = prevRecord ? r.saldo_final - prevRecord.saldo_final : null;
 
             return (
               <Card key={r.id} className={cn(
                 "shadow-card transition-smooth hover:scale-[1.01]",
-                r.valor < 0 && "border-destructive/30"
+                r.saldo_final < 0 && "border-destructive/30"
               )}>
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                    {/* Month info */}
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className={cn(
                         "w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0",
-                        r.valor >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                        r.saldo_final >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
                       )}>
-                        {r.valor >= 0 ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
+                        {r.saldo_final >= 0 ? <TrendingUp className="w-6 h-6" /> : <TrendingDown className="w-6 h-6" />}
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-foreground">{MONTH_NAMES[r.mes - 1]} {r.ano}</p>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                          {r.saldo_inicial > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Wallet className="w-3 h-3" />
+                              Inicial: {formatCurrency(r.saldo_inicial)}
+                            </span>
+                          )}
                           <span className="flex items-center gap-1">
                             <ArrowUpRight className="w-3 h-3 text-success" />
                             {formatCurrency(r.total_receitas)}
@@ -280,14 +304,13 @@ export default function SaldoMensal() {
                       </div>
                     </div>
 
-                    {/* Value + status */}
                     <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
                       <div className="text-right">
                         <p className={cn(
                           "text-lg sm:text-xl font-bold",
-                          r.valor >= 0 ? "text-success" : "text-destructive"
+                          r.saldo_final >= 0 ? "text-success" : "text-destructive"
                         )}>
-                          {formatCurrency(r.valor)}
+                          {formatCurrency(r.saldo_final)}
                         </p>
                         {diff !== null && (
                           <p className={cn("text-xs", diff >= 0 ? "text-success" : "text-destructive")}>
@@ -297,14 +320,14 @@ export default function SaldoMensal() {
                       </div>
 
                       <div className="flex flex-col items-end gap-2">
-                        {getStatusBadge(r.status, r.valor)}
+                        {getStatusBadge(r)}
                         <div className="flex items-center gap-1.5">
-                          {r.status === "pendente" && r.valor > 0 && (
+                          {r.status === "pendente" && !r.locked && r.saldo_final > 0 && (
                             <Button size="sm" variant="outline" onClick={() => handleAcao(r)} className="text-xs">
                               Decidir
                             </Button>
                           )}
-                          {r.mes === mesAtual && r.ano === anoAtual && (
+                          {r.status === "pendente" && !r.locked && (
                             <Button
                               size="sm"
                               variant="ghost"
@@ -341,7 +364,12 @@ export default function SaldoMensal() {
                 <p className="text-sm text-muted-foreground">
                   {MONTH_NAMES[selectedRecord.mes - 1]} {selectedRecord.ano}
                 </p>
-                <p className="text-2xl font-bold text-success">{formatCurrency(selectedRecord.valor)}</p>
+                <p className="text-2xl font-bold text-success">{formatCurrency(selectedRecord.saldo_final)}</p>
+                {selectedRecord.saldo_inicial > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Inclui {formatCurrency(selectedRecord.saldo_inicial)} acumulado
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
