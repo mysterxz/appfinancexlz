@@ -44,7 +44,10 @@ export default function Dashboard() {
   const { mes, ano } = getCurrentMonth();
 
   useEffect(() => {
-    if (user) fetchDashboard();
+    if (user) {
+      fetchDashboard();
+      autoGeneratePreviousMonthSaldo();
+    }
   }, [user]);
 
   const fetchDashboard = async () => {
@@ -120,6 +123,46 @@ export default function Dashboard() {
       saldoMesAnterior: prevData ? Number(prevData.valor) : null,
     });
     setLoading(false);
+  };
+
+  // Auto-generate previous month's saldo if it doesn't exist yet
+  const autoGeneratePreviousMonthSaldo = async () => {
+    const userId = user!.id;
+    const prevMonth = mes === 1 ? 12 : mes - 1;
+    const prevYear = mes === 1 ? ano - 1 : ano;
+
+    const { data: existing } = await supabase
+      .from("saldo_mensal")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("mes", prevMonth)
+      .eq("ano", prevYear)
+      .maybeSingle();
+
+    // If already exists, do NOT touch it
+    if (existing) return;
+
+    // Calculate previous month totals
+    const start = `${prevYear}-${String(prevMonth).padStart(2, "0")}-01`;
+    const end = prevMonth === 12 ? `${prevYear + 1}-01-01` : `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-01`;
+
+    const { data: incomeData } = await supabase
+      .from("income").select("valor").eq("user_id", userId).gte("data", start).lt("data", end);
+    const { data: expensesData } = await supabase
+      .from("expenses").select("valor").eq("user_id", userId).gte("data", start).lt("data", end);
+
+    const totalReceitas = (incomeData || []).reduce((s, r) => s + Number(r.valor), 0);
+    const totalDespesas = (expensesData || []).reduce((s, e) => s + Number(e.valor), 0);
+
+    // Only create if there was any movement
+    if (totalReceitas === 0 && totalDespesas === 0) return;
+
+    const valor = totalReceitas - totalDespesas;
+    await supabase.from("saldo_mensal").insert({
+      user_id: userId, mes: prevMonth, ano: prevYear,
+      total_receitas: totalReceitas, total_despesas: totalDespesas,
+      valor, status: "pendente"
+    });
   };
 
   const getMonthlyData = async (userId: string) => {

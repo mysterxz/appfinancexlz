@@ -77,23 +77,33 @@ export default function SaldoMensal() {
     setMetas(data || []);
   };
 
-  const gerarSaldoMes = async () => {
+  const gerarSaldoMesAnterior = async () => {
     setGerando(true);
-    const { mes, ano } = getCurrentMonth();
+    const { mes: mesAtualRef, ano: anoAtualRef } = getCurrentMonth();
+    // Always generate for the PREVIOUS month
+    const mesPrev = mesAtualRef === 1 ? 12 : mesAtualRef - 1;
+    const anoPrev = mesAtualRef === 1 ? anoAtualRef - 1 : anoAtualRef;
     const userId = user!.id;
 
     // Check if already exists
     const { data: existing } = await supabase
       .from("saldo_mensal")
-      .select("id")
+      .select("id, status")
       .eq("user_id", userId)
-      .eq("mes", mes)
-      .eq("ano", ano)
+      .eq("mes", mesPrev)
+      .eq("ano", anoPrev)
       .maybeSingle();
 
-    // Calculate totals
-    const start = `${ano}-${String(mes).padStart(2, "0")}-01`;
-    const end = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+    // If already closed (guardado/gasto), do NOT recalculate
+    if (existing && (existing.status === "guardado" || existing.status === "gasto")) {
+      toast.info("O saldo desse mês já foi fechado e não pode ser recalculado.");
+      setGerando(false);
+      return;
+    }
+
+    // Calculate totals for previous month
+    const start = `${anoPrev}-${String(mesPrev).padStart(2, "0")}-01`;
+    const end = mesPrev === 12 ? `${anoPrev + 1}-01-01` : `${anoPrev}-${String(mesPrev + 1).padStart(2, "0")}-01`;
 
     const { data: incomeData } = await supabase
       .from("income").select("valor").eq("user_id", userId)
@@ -108,16 +118,17 @@ export default function SaldoMensal() {
     const valor = totalReceitas - totalDespesas;
 
     if (existing) {
+      // Only update if still pendente
       await supabase
         .from("saldo_mensal")
-        .update({ total_receitas: totalReceitas, total_despesas: totalDespesas, valor, status: "pendente" })
+        .update({ total_receitas: totalReceitas, total_despesas: totalDespesas, valor })
         .eq("id", existing.id);
-      toast.success("Saldo do mês atualizado!");
+      toast.success(`Saldo de ${MONTH_NAMES[mesPrev - 1]}/${anoPrev} atualizado!`);
     } else {
       await supabase
         .from("saldo_mensal")
-        .insert({ user_id: userId, mes, ano, total_receitas: totalReceitas, total_despesas: totalDespesas, valor, status: "pendente" });
-      toast.success("Saldo do mês gerado!");
+        .insert({ user_id: userId, mes: mesPrev, ano: anoPrev, total_receitas: totalReceitas, total_despesas: totalDespesas, valor, status: "pendente" });
+      toast.success(`Saldo de ${MONTH_NAMES[mesPrev - 1]}/${anoPrev} gerado!`);
     }
 
     fetchRegistros();
@@ -219,9 +230,9 @@ export default function SaldoMensal() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Saldo Mensal</h1>
           <p className="text-muted-foreground text-sm">Controle o destino do saldo de cada mês</p>
         </div>
-        <Button onClick={gerarSaldoMes} disabled={gerando} className="gap-2">
+        <Button onClick={gerarSaldoMesAnterior} disabled={gerando} className="gap-2">
           <RefreshCw className={cn("w-4 h-4", gerando && "animate-spin")} />
-          Gerar Saldo do Mês Atual
+          Gerar Saldo do Mês Anterior
         </Button>
       </div>
 
@@ -230,7 +241,7 @@ export default function SaldoMensal() {
           <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Wallet className="w-12 h-12 mb-4 opacity-30" />
             <p className="text-lg font-medium">Nenhum saldo registrado</p>
-            <p className="text-sm mt-1">Clique em "Gerar Saldo do Mês Atual" para começar</p>
+            <p className="text-sm mt-1">Clique em "Gerar Saldo do Mês Anterior" para começar</p>
           </CardContent>
         </Card>
       ) : (
