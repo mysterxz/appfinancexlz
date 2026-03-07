@@ -6,15 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Target, Calendar, PlusCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Target, Calendar, PlusCircle, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Goal {
   id: string; nome: string; valor_meta: number; valor_atual: number;
-  prazo: string; cor: string;
+  prazo: string; cor: string; conta_id: string | null;
+}
+
+interface AccountOption {
+  id: string; nome: string; banco: string; saldo_inicial: number;
 }
 
 const CORES = ["#8B5CF6","#3B82F6","#10B981","#F97316","#EC4899","#F59E0B","#06B6D4","#EF4444"];
@@ -22,27 +27,33 @@ const CORES = ["#8B5CF6","#3B82F6","#10B981","#F97316","#EC4899","#F59E0B","#06B
 export default function Metas() {
   const { user } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [aportarId, setAportarId] = useState<string|null>(null);
   const [aporte, setAporte] = useState("");
   const [editingId, setEditingId] = useState<string|null>(null);
-  const [form, setForm] = useState({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6" });
+  const [form, setForm] = useState({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6", conta_id:"" });
 
-  useEffect(() => { if(user) fetchGoals(); }, [user]);
+  useEffect(() => { if(user) { fetchGoals(); fetchAccounts(); } }, [user]);
 
   const fetchGoals = async () => {
     setLoading(true);
     const { data } = await supabase.from("goals").select("*").eq("user_id", user!.id).order("prazo");
-    setGoals((data||[]).map(g=>({...g, valor_meta:Number(g.valor_meta), valor_atual:Number(g.valor_atual)})));
+    setGoals((data||[]).map(g=>({...g, valor_meta:Number(g.valor_meta), valor_atual:Number(g.valor_atual), conta_id: (g as any).conta_id || null})));
     setLoading(false);
   };
 
-  const resetForm = () => setForm({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6" });
+  const fetchAccounts = async () => {
+    const { data } = await supabase.from("accounts").select("id, nome, banco, saldo_inicial").eq("user_id", user!.id).order("nome");
+    setAccounts((data||[]).map(a=>({...a, saldo_inicial: Number(a.saldo_inicial)})));
+  };
+
+  const resetForm = () => setForm({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6", conta_id:"" });
 
   const openEdit = (g: Goal) => {
     setEditingId(g.id);
-    setForm({ nome:g.nome, valor_meta:String(g.valor_meta), prazo:g.prazo, cor:g.cor });
+    setForm({ nome:g.nome, valor_meta:String(g.valor_meta), prazo:g.prazo, cor:g.cor, conta_id: g.conta_id || "" });
     setDialogOpen(true);
   };
 
@@ -51,11 +62,24 @@ export default function Metas() {
     const valor_meta = parseFloat(form.valor_meta.replace(",","."));
     if(isNaN(valor_meta)||valor_meta<=0) { toast({ title:"Valor inválido", variant:"destructive" }); return; }
 
+    const contaId = form.conta_id || null;
+    let valorAtualInicial: number | undefined;
+
+    // If linking to account, auto-set valor_atual from account balance
+    if (contaId) {
+      const acc = accounts.find(a => a.id === contaId);
+      if (acc) valorAtualInicial = acc.saldo_inicial;
+    }
+
     if(editingId) {
-      await supabase.from("goals").update({ nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor }).eq("id",editingId);
+      const updatePayload: any = { nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor, conta_id: contaId };
+      if (valorAtualInicial !== undefined) updatePayload.valor_atual = valorAtualInicial;
+      await supabase.from("goals").update(updatePayload).eq("id",editingId);
       toast({ title:"Meta atualizada!" });
     } else {
-      await supabase.from("goals").insert([{ user_id:user!.id, nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor }]);
+      const insertPayload: any = { user_id:user!.id, nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor, conta_id: contaId };
+      if (valorAtualInicial !== undefined) insertPayload.valor_atual = valorAtualInicial;
+      await supabase.from("goals").insert([insertPayload]);
       toast({ title:"Meta criada!" });
     }
     setDialogOpen(false); setEditingId(null); resetForm(); fetchGoals();
@@ -118,6 +142,21 @@ export default function Metas() {
                   ))}
                 </div>
               </div>
+              {accounts.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Vincular a uma conta <span className="text-muted-foreground">(opcional)</span></Label>
+                  <Select value={form.conta_id} onValueChange={v => setForm(f => ({...f, conta_id: v === "none" ? "" : v}))}>
+                    <SelectTrigger><SelectValue placeholder="Nenhuma conta vinculada" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma</SelectItem>
+                      {accounts.map(a => (
+                        <SelectItem key={a.id} value={a.id}>{a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">O saldo da meta será sincronizado automaticamente com o saldo da conta.</p>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={()=>setDialogOpen(false)}>Cancelar</Button>
                 <Button type="submit" className="flex-1 gradient-primary border-0">Salvar</Button>
@@ -161,6 +200,12 @@ export default function Metas() {
                             {diasRestantes<0?"Vencida":diasRestantes===0?"Hoje":` · ${diasRestantes} dias`}
                           </span>}
                         </p>
+                        {g.conta_id && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Link2 className="w-3 h-3" />
+                            Vinculada a conta: {accounts.find(a => a.id === g.conta_id)?.nome || "—"}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-1">

@@ -43,15 +43,45 @@ export default function Contas() {
     setCards((data||[]).map(c=>({...c, limite:Number(c.limite)})));
   };
 
+  const syncGoalWithAccount = async (accountName: string, accountId: string, saldo: number) => {
+    // Sync by conta_id link
+    const { data: linkedGoals } = await supabase
+      .from("goals")
+      .select("id")
+      .eq("user_id", user!.id)
+      .eq("conta_id", accountId);
+    if (linkedGoals && linkedGoals.length > 0) {
+      for (const g of linkedGoals) {
+        await supabase.from("goals").update({ valor_atual: saldo }).eq("id", g.id);
+      }
+    }
+    // Also sync by exact name match (for goals not yet linked by conta_id)
+    const { data: namedGoals } = await supabase
+      .from("goals")
+      .select("id, conta_id")
+      .eq("user_id", user!.id)
+      .eq("nome", accountName)
+      .is("conta_id", null);
+    if (namedGoals && namedGoals.length > 0) {
+      for (const g of namedGoals) {
+        await supabase.from("goals").update({ valor_atual: saldo, conta_id: accountId }).eq("id", g.id);
+      }
+    }
+  };
+
   const handleSubmitAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     const saldo_inicial = parseFloat(accForm.saldo_inicial.replace(",","."));
     const payload = { user_id:user!.id, nome:accForm.nome, banco:accForm.banco, saldo_inicial, tipo:accForm.tipo, cor:accForm.cor };
     if(editAccountId) {
       await supabase.from("accounts").update({nome:accForm.nome,banco:accForm.banco,saldo_inicial,tipo:accForm.tipo,cor:accForm.cor}).eq("id",editAccountId);
+      await syncGoalWithAccount(accForm.nome, editAccountId, saldo_inicial);
       toast({ title:"Conta atualizada!" });
     } else {
-      await supabase.from("accounts").insert([payload]);
+      const { data: newAcc } = await supabase.from("accounts").insert([payload]).select("id").single();
+      if (newAcc) {
+        await syncGoalWithAccount(accForm.nome, newAcc.id, saldo_inicial);
+      }
       toast({ title:"Conta criada!" });
     }
     setAccountDialog(false); setEditAccountId(null);

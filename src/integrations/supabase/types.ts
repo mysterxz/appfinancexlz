@@ -157,6 +157,7 @@ export type Database = {
       }
       goals: {
         Row: {
+          conta_id: string | null
           cor: string | null
           created_at: string
           id: string
@@ -167,6 +168,7 @@ export type Database = {
           valor_meta: number
         }
         Insert: {
+          conta_id?: string | null
           cor?: string | null
           created_at?: string
           id?: string
@@ -177,6 +179,7 @@ export type Database = {
           valor_meta: number
         }
         Update: {
+          conta_id?: string | null
           cor?: string | null
           created_at?: string
           id?: string
@@ -186,7 +189,15 @@ export type Database = {
           valor_atual?: number
           valor_meta?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "goals_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       income: {
         Row: {
