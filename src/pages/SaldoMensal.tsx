@@ -159,6 +159,9 @@ export default function SaldoMensal() {
     setAcao(null);
     setNomeCaixinha("");
     setMetaSelecionada("");
+    setValorAcao(record.saldo_final.toFixed(2));
+    setDescricaoGasto("");
+    setValorError("");
     setDialogOpen(true);
   };
 
