@@ -200,6 +200,12 @@ export default function Metas() {
                             {diasRestantes<0?"Vencida":diasRestantes===0?"Hoje":` · ${diasRestantes} dias`}
                           </span>}
                         </p>
+                        {g.conta_id && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Link2 className="w-3 h-3" />
+                            Vinculada a conta: {accounts.find(a => a.id === g.conta_id)?.nome || "—"}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-1">
