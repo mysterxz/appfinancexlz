@@ -35,20 +35,25 @@ export default function Metas() {
   const [editingId, setEditingId] = useState<string|null>(null);
   const [form, setForm] = useState({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6", conta_id:"" });
 
-  useEffect(() => { if(user) fetchGoals(); }, [user]);
+  useEffect(() => { if(user) { fetchGoals(); fetchAccounts(); } }, [user]);
 
   const fetchGoals = async () => {
     setLoading(true);
     const { data } = await supabase.from("goals").select("*").eq("user_id", user!.id).order("prazo");
-    setGoals((data||[]).map(g=>({...g, valor_meta:Number(g.valor_meta), valor_atual:Number(g.valor_atual)})));
+    setGoals((data||[]).map(g=>({...g, valor_meta:Number(g.valor_meta), valor_atual:Number(g.valor_atual), conta_id: (g as any).conta_id || null})));
     setLoading(false);
   };
 
-  const resetForm = () => setForm({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6" });
+  const fetchAccounts = async () => {
+    const { data } = await supabase.from("accounts").select("id, nome, banco, saldo_inicial").eq("user_id", user!.id).order("nome");
+    setAccounts((data||[]).map(a=>({...a, saldo_inicial: Number(a.saldo_inicial)})));
+  };
+
+  const resetForm = () => setForm({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6", conta_id:"" });
 
   const openEdit = (g: Goal) => {
     setEditingId(g.id);
-    setForm({ nome:g.nome, valor_meta:String(g.valor_meta), prazo:g.prazo, cor:g.cor });
+    setForm({ nome:g.nome, valor_meta:String(g.valor_meta), prazo:g.prazo, cor:g.cor, conta_id: g.conta_id || "" });
     setDialogOpen(true);
   };
 
