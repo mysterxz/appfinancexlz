@@ -62,11 +62,24 @@ export default function Metas() {
     const valor_meta = parseFloat(form.valor_meta.replace(",","."));
     if(isNaN(valor_meta)||valor_meta<=0) { toast({ title:"Valor inválido", variant:"destructive" }); return; }
 
+    const contaId = form.conta_id || null;
+    let valorAtualInicial: number | undefined;
+
+    // If linking to account, auto-set valor_atual from account balance
+    if (contaId) {
+      const acc = accounts.find(a => a.id === contaId);
+      if (acc) valorAtualInicial = acc.saldo_inicial;
+    }
+
     if(editingId) {
-      await supabase.from("goals").update({ nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor }).eq("id",editingId);
+      const updatePayload: any = { nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor, conta_id: contaId };
+      if (valorAtualInicial !== undefined) updatePayload.valor_atual = valorAtualInicial;
+      await supabase.from("goals").update(updatePayload).eq("id",editingId);
       toast({ title:"Meta atualizada!" });
     } else {
-      await supabase.from("goals").insert([{ user_id:user!.id, nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor }]);
+      const insertPayload: any = { user_id:user!.id, nome:form.nome, valor_meta, prazo:form.prazo, cor:form.cor, conta_id: contaId };
+      if (valorAtualInicial !== undefined) insertPayload.valor_atual = valorAtualInicial;
+      await supabase.from("goals").insert([insertPayload]);
       toast({ title:"Meta criada!" });
     }
     setDialogOpen(false); setEditingId(null); resetForm(); fetchGoals();
