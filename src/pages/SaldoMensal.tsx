@@ -407,7 +407,7 @@ export default function SaldoMensal() {
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant={acao === "guardar" ? "default" : "outline"}
-                  onClick={() => setAcao("guardar")}
+                  onClick={() => { setAcao("guardar"); setValorAcao(selectedRecord.saldo_final.toFixed(2)); setValorError(""); }}
                   className="flex flex-col gap-1 h-auto py-4"
                 >
                   <PiggyBank className="w-6 h-6" />
@@ -415,7 +415,7 @@ export default function SaldoMensal() {
                 </Button>
                 <Button
                   variant={acao === "gastar" ? "default" : "outline"}
-                  onClick={() => setAcao("gastar")}
+                  onClick={() => { setAcao("gastar"); setValorAcao(selectedRecord.saldo_final.toFixed(2)); setValorError(""); }}
                   className="flex flex-col gap-1 h-auto py-4"
                 >
                   <ShoppingBag className="w-6 h-6" />
@@ -425,6 +425,23 @@ export default function SaldoMensal() {
 
               {acao === "guardar" && (
                 <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Valor para guardar</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={selectedRecord.saldo_final}
+                        value={valorAcao}
+                        onChange={e => { setValorAcao(e.target.value); setValorError(""); }}
+                        className="pl-10"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    {valorError && <p className="text-xs text-destructive">{valorError}</p>}
+                  </div>
                   {metas.length > 0 && (
                     <div className="space-y-1.5">
                       <Label>Escolher meta existente</Label>
@@ -452,9 +469,36 @@ export default function SaldoMensal() {
               )}
 
               {acao === "gastar" && (
-                <p className="text-sm text-muted-foreground text-center">
-                  O valor será registrado como despesa na categoria "Outros".
-                </p>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Valor para gastar</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={selectedRecord.saldo_final}
+                        value={valorAcao}
+                        onChange={e => { setValorAcao(e.target.value); setValorError(""); }}
+                        className="pl-10"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    {valorError && <p className="text-xs text-destructive">{valorError}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Descrição do gasto <span className="text-muted-foreground">(opcional)</span></Label>
+                    <Input
+                      value={descricaoGasto}
+                      onChange={e => setDescricaoGasto(e.target.value)}
+                      placeholder="Ex: Compra especial"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    O valor será registrado como despesa na categoria "Outros".
+                  </p>
+                </div>
               )}
             </div>
           )}
