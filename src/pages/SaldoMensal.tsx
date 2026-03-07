@@ -52,6 +52,9 @@ export default function SaldoMensal() {
   const [metaSelecionada, setMetaSelecionada] = useState<string>("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<SaldoMensalRecord | null>(null);
+  const [valorAcao, setValorAcao] = useState("");
+  const [descricaoGasto, setDescricaoGasto] = useState("");
+  const [valorError, setValorError] = useState("");
 
   useEffect(() => {
     if (user) {
