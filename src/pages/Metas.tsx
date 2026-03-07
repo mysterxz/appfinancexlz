@@ -27,12 +27,13 @@ const CORES = ["#8B5CF6","#3B82F6","#10B981","#F97316","#EC4899","#F59E0B","#06B
 export default function Metas() {
   const { user } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [aportarId, setAportarId] = useState<string|null>(null);
   const [aporte, setAporte] = useState("");
   const [editingId, setEditingId] = useState<string|null>(null);
-  const [form, setForm] = useState({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6" });
+  const [form, setForm] = useState({ nome:"", valor_meta:"", prazo:"", cor:"#8B5CF6", conta_id:"" });
 
   useEffect(() => { if(user) fetchGoals(); }, [user]);
 
