@@ -168,6 +168,20 @@ export default function SaldoMensal() {
   const confirmarAcao = async () => {
     if (!selectedRecord || !acao) return;
 
+    const valor = parseFloat(valorAcao.replace(",", "."));
+    if (isNaN(valor) || valor <= 0) {
+      setValorError("O valor deve ser maior que zero.");
+      return;
+    }
+    if (valor > selectedRecord.saldo_final) {
+      setValorError("Valor maior que o saldo disponível.");
+      return;
+    }
+    setValorError("");
+
+    const restante = selectedRecord.saldo_final - valor;
+    const isPartial = restante > 0;
+
     if (acao === "guardar") {
       const caixinha = metaSelecionada || nomeCaixinha;
       if (!caixinha) {
@@ -181,30 +195,42 @@ export default function SaldoMensal() {
         if (goalData) {
           await supabase
             .from("goals")
-            .update({ valor_atual: Number(goalData.valor_atual) + selectedRecord.saldo_final })
+            .update({ valor_atual: Number(goalData.valor_atual) + valor })
             .eq("id", metaSelecionada);
         }
       }
 
       await supabase
         .from("saldo_mensal")
-        .update({ status: "guardado", locked: true, nome_caixinha: metaSelecionada ? metas.find(m => m.id === metaSelecionada)?.nome : nomeCaixinha })
+        .update({
+          status: isPartial ? "pendente" : "guardado",
+          locked: !isPartial,
+          nome_caixinha: metaSelecionada ? metas.find(m => m.id === metaSelecionada)?.nome : nomeCaixinha,
+          valor_guardado: (selectedRecord as any).valor_guardado ? Number((selectedRecord as any).valor_guardado) + valor : valor,
+          saldo_final: restante,
+        })
         .eq("id", selectedRecord.id);
-      toast.success("Valor guardado com sucesso!");
+      toast.success(`${formatCurrency(valor)} guardado com sucesso!`);
     } else {
+      const descricao = descricaoGasto.trim() || `Saldo ${MONTH_NAMES[selectedRecord.mes - 1]}/${selectedRecord.ano}`;
       await supabase.from("expenses").insert({
         user_id: user!.id,
-        titulo: `Saldo ${MONTH_NAMES[selectedRecord.mes - 1]}/${selectedRecord.ano}`,
-        valor: selectedRecord.saldo_final,
+        titulo: descricao,
+        valor: valor,
         categoria: "Outros",
         data: new Date().toISOString().split("T")[0],
       });
 
       await supabase
         .from("saldo_mensal")
-        .update({ status: "gasto", locked: true })
+        .update({
+          status: isPartial ? "pendente" : "gasto",
+          locked: !isPartial,
+          valor_gasto: (selectedRecord as any).valor_gasto ? Number((selectedRecord as any).valor_gasto) + valor : valor,
+          saldo_final: restante,
+        })
         .eq("id", selectedRecord.id);
-      toast.success("Valor registrado como gasto!");
+      toast.success(`${formatCurrency(valor)} registrado como gasto!`);
     }
 
     setDialogOpen(false);
