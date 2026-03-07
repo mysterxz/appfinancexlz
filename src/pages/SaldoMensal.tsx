@@ -52,6 +52,9 @@ export default function SaldoMensal() {
   const [metaSelecionada, setMetaSelecionada] = useState<string>("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<SaldoMensalRecord | null>(null);
+  const [valorAcao, setValorAcao] = useState("");
+  const [descricaoGasto, setDescricaoGasto] = useState("");
+  const [valorError, setValorError] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -156,11 +159,28 @@ export default function SaldoMensal() {
     setAcao(null);
     setNomeCaixinha("");
     setMetaSelecionada("");
+    setValorAcao(record.saldo_final.toFixed(2));
+    setDescricaoGasto("");
+    setValorError("");
     setDialogOpen(true);
   };
 
   const confirmarAcao = async () => {
     if (!selectedRecord || !acao) return;
+
+    const valor = parseFloat(valorAcao.replace(",", "."));
+    if (isNaN(valor) || valor <= 0) {
+      setValorError("O valor deve ser maior que zero.");
+      return;
+    }
+    if (valor > selectedRecord.saldo_final) {
+      setValorError("Valor maior que o saldo disponível.");
+      return;
+    }
+    setValorError("");
+
+    const restante = selectedRecord.saldo_final - valor;
+    const isPartial = restante > 0;
 
     if (acao === "guardar") {
       const caixinha = metaSelecionada || nomeCaixinha;
@@ -175,30 +195,42 @@ export default function SaldoMensal() {
         if (goalData) {
           await supabase
             .from("goals")
-            .update({ valor_atual: Number(goalData.valor_atual) + selectedRecord.saldo_final })
+            .update({ valor_atual: Number(goalData.valor_atual) + valor })
             .eq("id", metaSelecionada);
         }
       }
 
       await supabase
         .from("saldo_mensal")
-        .update({ status: "guardado", locked: true, nome_caixinha: metaSelecionada ? metas.find(m => m.id === metaSelecionada)?.nome : nomeCaixinha })
+        .update({
+          status: isPartial ? "pendente" : "guardado",
+          locked: !isPartial,
+          nome_caixinha: metaSelecionada ? metas.find(m => m.id === metaSelecionada)?.nome : nomeCaixinha,
+          valor_guardado: (selectedRecord as any).valor_guardado ? Number((selectedRecord as any).valor_guardado) + valor : valor,
+          saldo_final: restante,
+        })
         .eq("id", selectedRecord.id);
-      toast.success("Valor guardado com sucesso!");
+      toast.success(`${formatCurrency(valor)} guardado com sucesso!`);
     } else {
+      const descricao = descricaoGasto.trim() || `Saldo ${MONTH_NAMES[selectedRecord.mes - 1]}/${selectedRecord.ano}`;
       await supabase.from("expenses").insert({
         user_id: user!.id,
-        titulo: `Saldo ${MONTH_NAMES[selectedRecord.mes - 1]}/${selectedRecord.ano}`,
-        valor: selectedRecord.saldo_final,
+        titulo: descricao,
+        valor: valor,
         categoria: "Outros",
         data: new Date().toISOString().split("T")[0],
       });
 
       await supabase
         .from("saldo_mensal")
-        .update({ status: "gasto", locked: true })
+        .update({
+          status: isPartial ? "pendente" : "gasto",
+          locked: !isPartial,
+          valor_gasto: (selectedRecord as any).valor_gasto ? Number((selectedRecord as any).valor_gasto) + valor : valor,
+          saldo_final: restante,
+        })
         .eq("id", selectedRecord.id);
-      toast.success("Valor registrado como gasto!");
+      toast.success(`${formatCurrency(valor)} registrado como gasto!`);
     }
 
     setDialogOpen(false);
@@ -375,7 +407,7 @@ export default function SaldoMensal() {
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant={acao === "guardar" ? "default" : "outline"}
-                  onClick={() => setAcao("guardar")}
+                  onClick={() => { setAcao("guardar"); setValorAcao(selectedRecord.saldo_final.toFixed(2)); setValorError(""); }}
                   className="flex flex-col gap-1 h-auto py-4"
                 >
                   <PiggyBank className="w-6 h-6" />
@@ -383,7 +415,7 @@ export default function SaldoMensal() {
                 </Button>
                 <Button
                   variant={acao === "gastar" ? "default" : "outline"}
-                  onClick={() => setAcao("gastar")}
+                  onClick={() => { setAcao("gastar"); setValorAcao(selectedRecord.saldo_final.toFixed(2)); setValorError(""); }}
                   className="flex flex-col gap-1 h-auto py-4"
                 >
                   <ShoppingBag className="w-6 h-6" />
@@ -393,6 +425,23 @@ export default function SaldoMensal() {
 
               {acao === "guardar" && (
                 <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Valor para guardar</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={selectedRecord.saldo_final}
+                        value={valorAcao}
+                        onChange={e => { setValorAcao(e.target.value); setValorError(""); }}
+                        className="pl-10"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    {valorError && <p className="text-xs text-destructive">{valorError}</p>}
+                  </div>
                   {metas.length > 0 && (
                     <div className="space-y-1.5">
                       <Label>Escolher meta existente</Label>
@@ -420,9 +469,36 @@ export default function SaldoMensal() {
               )}
 
               {acao === "gastar" && (
-                <p className="text-sm text-muted-foreground text-center">
-                  O valor será registrado como despesa na categoria "Outros".
-                </p>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Valor para gastar</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={selectedRecord.saldo_final}
+                        value={valorAcao}
+                        onChange={e => { setValorAcao(e.target.value); setValorError(""); }}
+                        className="pl-10"
+                        placeholder="0,00"
+                      />
+                    </div>
+                    {valorError && <p className="text-xs text-destructive">{valorError}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Descrição do gasto <span className="text-muted-foreground">(opcional)</span></Label>
+                    <Input
+                      value={descricaoGasto}
+                      onChange={e => setDescricaoGasto(e.target.value)}
+                      placeholder="Ex: Compra especial"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    O valor será registrado como despesa na categoria "Outros".
+                  </p>
+                </div>
               )}
             </div>
           )}
