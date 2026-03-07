@@ -14,7 +14,11 @@ import { cn } from "@/lib/utils";
 
 interface Goal {
   id: string; nome: string; valor_meta: number; valor_atual: number;
-  prazo: string; cor: string;
+  prazo: string; cor: string; conta_id: string | null;
+}
+
+interface AccountOption {
+  id: string; nome: string; banco: string; saldo_inicial: number;
 }
 
 const CORES = ["#8B5CF6","#3B82F6","#10B981","#F97316","#EC4899","#F59E0B","#06B6D4","#EF4444"];
