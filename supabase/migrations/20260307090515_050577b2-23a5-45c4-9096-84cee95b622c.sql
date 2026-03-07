@@ -1,0 +1,1 @@
+ALTER TABLE public.goals ADD COLUMN IF NOT EXISTS conta_id uuid REFERENCES public.accounts(id) ON DELETE SET NULL;
