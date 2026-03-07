@@ -142,6 +142,21 @@ export default function Metas() {
                   ))}
                 </div>
               </div>
+              {accounts.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Vincular a uma conta <span className="text-muted-foreground">(opcional)</span></Label>
+                  <Select value={form.conta_id} onValueChange={v => setForm(f => ({...f, conta_id: v === "none" ? "" : v}))}>
+                    <SelectTrigger><SelectValue placeholder="Nenhuma conta vinculada" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhuma</SelectItem>
+                      {accounts.map(a => (
+                        <SelectItem key={a.id} value={a.id}>{a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">O saldo da meta será sincronizado automaticamente com o saldo da conta.</p>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={()=>setDialogOpen(false)}>Cancelar</Button>
                 <Button type="submit" className="flex-1 gradient-primary border-0">Salvar</Button>
