@@ -32,9 +32,9 @@ export default function Receitas() {
   // Investment modal state
   const [investModalOpen, setInvestModalOpen] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [contaOrigemId, setContaOrigemId] = useState("");
   const [contaDestinoId, setContaDestinoId] = useState("");
   const [pendingInvestment, setPendingInvestment] = useState<{ titulo: string; valor: number; data: string } | null>(null);
+  const [saldoDisponivel, setSaldoDisponivel] = useState(0);
 
   const [form, setForm] = useState({
     titulo: "", valor: "", categoria: "Salário",
