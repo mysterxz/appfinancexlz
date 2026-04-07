@@ -32,9 +32,9 @@ export default function Receitas() {
   // Investment modal state
   const [investModalOpen, setInvestModalOpen] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [contaOrigemId, setContaOrigemId] = useState("");
   const [contaDestinoId, setContaDestinoId] = useState("");
   const [pendingInvestment, setPendingInvestment] = useState<{ titulo: string; valor: number; data: string } | null>(null);
+  const [saldoDisponivel, setSaldoDisponivel] = useState(0);
 
   const [form, setForm] = useState({
     titulo: "", valor: "", categoria: "Salário",
@@ -46,8 +46,32 @@ export default function Receitas() {
   useEffect(() => { if (user) fetchIncome(); }, [user, filterMes, filterAno]);
 
   useEffect(() => {
-    if (user) fetchAccounts();
+    if (user) {
+      fetchAccounts();
+      fetchSaldoDisponivel();
+    }
   }, [user]);
+
+  const fetchSaldoDisponivel = async () => {
+    const now = new Date();
+    const mes = now.getMonth() + 1;
+    const ano = now.getFullYear();
+    const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+    const prevMonth = mes === 1 ? 12 : mes - 1;
+    const prevYear = mes === 1 ? ano - 1 : ano;
+
+    const [{ data: incomeData }, { data: expensesData }, { data: prevSaldo }] = await Promise.all([
+      supabase.from("income").select("valor").eq("user_id", user!.id).gte("data", startDate).lt("data", endDate),
+      supabase.from("expenses").select("valor").eq("user_id", user!.id).gte("data", startDate).lt("data", endDate),
+      supabase.from("saldo_mensal").select("saldo_final").eq("user_id", user!.id).eq("mes", prevMonth).eq("ano", prevYear).maybeSingle(),
+    ]);
+
+    const totalReceitas = (incomeData || []).reduce((s, r) => s + Number(r.valor), 0);
+    const totalDespesas = (expensesData || []).reduce((s, e) => s + Number(e.valor), 0);
+    const saldoInicial = prevSaldo ? Number(prevSaldo.saldo_final) : 0;
+    setSaldoDisponivel(saldoInicial + totalReceitas - totalDespesas);
+  };
 
   const fetchAccounts = async () => {
     const { data } = await supabase.from("accounts").select("id, nome, banco, saldo_inicial").eq("user_id", user!.id);
@@ -82,8 +106,10 @@ export default function Receitas() {
 
     // If category is "Investimentos" and not editing, show investment modal
     if (form.categoria === "Investimentos" && !editingId) {
+      if (valor > saldoDisponivel) {
+        toast({ title: "Valor maior que o saldo disponível", variant: "destructive" }); return;
+      }
       setPendingInvestment({ titulo: form.titulo, valor, data: form.data });
-      setContaOrigemId("");
       setContaDestinoId("");
       setDialogOpen(false);
       setInvestModalOpen(true);
@@ -106,21 +132,11 @@ export default function Receitas() {
 
   const handleConfirmInvestment = async () => {
     if (!pendingInvestment) return;
-    if (!contaOrigemId) { toast({ title: "Selecione a conta de origem", variant: "destructive" }); return; }
     if (!contaDestinoId) { toast({ title: "Selecione a conta de destino", variant: "destructive" }); return; }
-    if (contaOrigemId === contaDestinoId) { toast({ title: "Conta de origem e destino devem ser diferentes", variant: "destructive" }); return; }
 
-    const origem = accounts.find(a => a.id === contaOrigemId);
-    if (origem && origem.saldo_inicial < pendingInvestment.valor) {
-      toast({ title: "Saldo insuficiente na conta de origem", variant: "destructive" });
-      return;
+    if (pendingInvestment.valor > saldoDisponivel) {
+      toast({ title: "Valor maior que o saldo disponível", variant: "destructive" }); return;
     }
-
-    // Deduct from source account
-    const { error: errOrigem } = await supabase.from("accounts")
-      .update({ saldo_inicial: (origem!.saldo_inicial - pendingInvestment.valor) })
-      .eq("id", contaOrigemId);
-    if (errOrigem) { toast({ title: "Erro ao debitar conta de origem", variant: "destructive" }); return; }
 
     // Add to destination account
     const destino = accounts.find(a => a.id === contaDestinoId);
@@ -129,16 +145,20 @@ export default function Receitas() {
       .eq("id", contaDestinoId);
     if (errDestino) { toast({ title: "Erro ao creditar conta de destino", variant: "destructive" }); return; }
 
+    // Create an expense to deduct from available balance
+    const { error: errExpense } = await supabase.from("expenses").insert([{
+      user_id: user!.id,
+      titulo: `Investimento: ${pendingInvestment.titulo || destino!.nome}`,
+      valor: pendingInvestment.valor,
+      categoria: "Investimentos",
+      data: pendingInvestment.data,
+    }]);
+    if (errExpense) { toast({ title: "Erro ao registrar investimento", variant: "destructive" }); return; }
+
     // Sync goals linked to destination account
     await supabase.from("goals")
       .update({ valor_atual: destino!.saldo_inicial + pendingInvestment.valor })
       .eq("conta_id", contaDestinoId)
-      .eq("user_id", user!.id);
-
-    // Also sync goals linked to source account
-    await supabase.from("goals")
-      .update({ valor_atual: origem!.saldo_inicial - pendingInvestment.valor })
-      .eq("conta_id", contaOrigemId)
       .eq("user_id", user!.id);
 
     toast({ title: `Investimento de ${formatCurrency(pendingInvestment.valor)} transferido para ${destino!.nome}` });
@@ -147,6 +167,7 @@ export default function Receitas() {
     setPendingInvestment(null);
     resetForm();
     fetchAccounts();
+    fetchSaldoDisponivel();
   };
 
   const handleDelete = async (id: string) => {
@@ -215,29 +236,20 @@ export default function Receitas() {
               <ArrowRightLeft className="w-5 h-5" /> Definir destino do investimento
             </DialogTitle>
             <DialogDescription>
-              Selecione a conta de origem e a conta ou caixinha que receberá o valor de {pendingInvestment ? formatCurrency(pendingInvestment.valor) : ""}.
+              Selecione a conta ou caixinha que receberá o valor de {pendingInvestment ? formatCurrency(pendingInvestment.valor) : ""}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label>Conta de origem</Label>
-              <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                <SelectTrigger><SelectValue placeholder="Selecione a conta de origem" /></SelectTrigger>
-                <SelectContent>
-                  {accounts.map(a => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="p-3 rounded-lg bg-secondary/50 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Saldo Disponível</span>
+              <span className="text-sm font-bold text-success">{formatCurrency(saldoDisponivel)}</span>
             </div>
             <div className="space-y-2">
               <Label>Conta de destino</Label>
               <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
                 <SelectTrigger><SelectValue placeholder="Selecione a conta de destino" /></SelectTrigger>
                 <SelectContent>
-                  {accounts.filter(a => a.id !== contaOrigemId).map(a => (
+                  {accounts.map(a => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}
                     </SelectItem>
