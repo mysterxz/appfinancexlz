@@ -46,8 +46,32 @@ export default function Receitas() {
   useEffect(() => { if (user) fetchIncome(); }, [user, filterMes, filterAno]);
 
   useEffect(() => {
-    if (user) fetchAccounts();
+    if (user) {
+      fetchAccounts();
+      fetchSaldoDisponivel();
+    }
   }, [user]);
+
+  const fetchSaldoDisponivel = async () => {
+    const now = new Date();
+    const mes = now.getMonth() + 1;
+    const ano = now.getFullYear();
+    const startDate = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    const endDate = mes === 12 ? `${ano + 1}-01-01` : `${ano}-${String(mes + 1).padStart(2, "0")}-01`;
+    const prevMonth = mes === 1 ? 12 : mes - 1;
+    const prevYear = mes === 1 ? ano - 1 : ano;
+
+    const [{ data: incomeData }, { data: expensesData }, { data: prevSaldo }] = await Promise.all([
+      supabase.from("income").select("valor").eq("user_id", user!.id).gte("data", startDate).lt("data", endDate),
+      supabase.from("expenses").select("valor").eq("user_id", user!.id).gte("data", startDate).lt("data", endDate),
+      supabase.from("saldo_mensal").select("saldo_final").eq("user_id", user!.id).eq("mes", prevMonth).eq("ano", prevYear).maybeSingle(),
+    ]);
+
+    const totalReceitas = (incomeData || []).reduce((s, r) => s + Number(r.valor), 0);
+    const totalDespesas = (expensesData || []).reduce((s, e) => s + Number(e.valor), 0);
+    const saldoInicial = prevSaldo ? Number(prevSaldo.saldo_final) : 0;
+    setSaldoDisponivel(saldoInicial + totalReceitas - totalDespesas);
+  };
 
   const fetchAccounts = async () => {
     const { data } = await supabase.from("accounts").select("id, nome, banco, saldo_inicial").eq("user_id", user!.id);
