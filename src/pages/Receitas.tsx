@@ -132,21 +132,11 @@ export default function Receitas() {
 
   const handleConfirmInvestment = async () => {
     if (!pendingInvestment) return;
-    if (!contaOrigemId) { toast({ title: "Selecione a conta de origem", variant: "destructive" }); return; }
     if (!contaDestinoId) { toast({ title: "Selecione a conta de destino", variant: "destructive" }); return; }
-    if (contaOrigemId === contaDestinoId) { toast({ title: "Conta de origem e destino devem ser diferentes", variant: "destructive" }); return; }
 
-    const origem = accounts.find(a => a.id === contaOrigemId);
-    if (origem && origem.saldo_inicial < pendingInvestment.valor) {
-      toast({ title: "Saldo insuficiente na conta de origem", variant: "destructive" });
-      return;
+    if (pendingInvestment.valor > saldoDisponivel) {
+      toast({ title: "Valor maior que o saldo disponível", variant: "destructive" }); return;
     }
-
-    // Deduct from source account
-    const { error: errOrigem } = await supabase.from("accounts")
-      .update({ saldo_inicial: (origem!.saldo_inicial - pendingInvestment.valor) })
-      .eq("id", contaOrigemId);
-    if (errOrigem) { toast({ title: "Erro ao debitar conta de origem", variant: "destructive" }); return; }
 
     // Add to destination account
     const destino = accounts.find(a => a.id === contaDestinoId);
@@ -155,16 +145,20 @@ export default function Receitas() {
       .eq("id", contaDestinoId);
     if (errDestino) { toast({ title: "Erro ao creditar conta de destino", variant: "destructive" }); return; }
 
+    // Create an expense to deduct from available balance
+    const { error: errExpense } = await supabase.from("expenses").insert([{
+      user_id: user!.id,
+      titulo: `Investimento: ${pendingInvestment.titulo || destino!.nome}`,
+      valor: pendingInvestment.valor,
+      categoria: "Investimentos",
+      data: pendingInvestment.data,
+    }]);
+    if (errExpense) { toast({ title: "Erro ao registrar investimento", variant: "destructive" }); return; }
+
     // Sync goals linked to destination account
     await supabase.from("goals")
       .update({ valor_atual: destino!.saldo_inicial + pendingInvestment.valor })
       .eq("conta_id", contaDestinoId)
-      .eq("user_id", user!.id);
-
-    // Also sync goals linked to source account
-    await supabase.from("goals")
-      .update({ valor_atual: origem!.saldo_inicial - pendingInvestment.valor })
-      .eq("conta_id", contaOrigemId)
       .eq("user_id", user!.id);
 
     toast({ title: `Investimento de ${formatCurrency(pendingInvestment.valor)} transferido para ${destino!.nome}` });
@@ -173,6 +167,7 @@ export default function Receitas() {
     setPendingInvestment(null);
     resetForm();
     fetchAccounts();
+    fetchSaldoDisponivel();
   };
 
   const handleDelete = async (id: string) => {
