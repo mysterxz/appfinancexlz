@@ -236,29 +236,20 @@ export default function Receitas() {
               <ArrowRightLeft className="w-5 h-5" /> Definir destino do investimento
             </DialogTitle>
             <DialogDescription>
-              Selecione a conta de origem e a conta ou caixinha que receberá o valor de {pendingInvestment ? formatCurrency(pendingInvestment.valor) : ""}.
+              Selecione a conta ou caixinha que receberá o valor de {pendingInvestment ? formatCurrency(pendingInvestment.valor) : ""}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label>Conta de origem</Label>
-              <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
-                <SelectTrigger><SelectValue placeholder="Selecione a conta de origem" /></SelectTrigger>
-                <SelectContent>
-                  {accounts.map(a => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="p-3 rounded-lg bg-secondary/50 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Saldo Disponível</span>
+              <span className="text-sm font-bold text-success">{formatCurrency(saldoDisponivel)}</span>
             </div>
             <div className="space-y-2">
               <Label>Conta de destino</Label>
               <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
                 <SelectTrigger><SelectValue placeholder="Selecione a conta de destino" /></SelectTrigger>
                 <SelectContent>
-                  {accounts.filter(a => a.id !== contaOrigemId).map(a => (
+                  {accounts.map(a => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}
                     </SelectItem>
