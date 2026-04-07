@@ -2,18 +2,22 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatCurrency, INCOME_CATEGORIES } from "@/lib/supabase";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, TrendingUp, Filter } from "lucide-react";
+import { Plus, Pencil, Trash2, TrendingUp, Filter, ArrowRightLeft } from "lucide-react";
 
 interface Income {
   id: string; titulo: string; valor: number; categoria: string; data: string;
+}
+
+interface Account {
+  id: string; nome: string; banco: string; saldo_inicial: number;
 }
 
 export default function Receitas() {
@@ -25,6 +29,13 @@ export default function Receitas() {
   const [filterMes, setFilterMes] = useState(String(new Date().getMonth() + 1));
   const [filterAno, setFilterAno] = useState(String(new Date().getFullYear()));
 
+  // Investment modal state
+  const [investModalOpen, setInvestModalOpen] = useState(false);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [contaOrigemId, setContaOrigemId] = useState("");
+  const [contaDestinoId, setContaDestinoId] = useState("");
+  const [pendingInvestment, setPendingInvestment] = useState<{ titulo: string; valor: number; data: string } | null>(null);
+
   const [form, setForm] = useState({
     titulo: "", valor: "", categoria: "Salário",
     data: new Date().toISOString().split("T")[0],
@@ -33,6 +44,15 @@ export default function Receitas() {
   const meses = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
   useEffect(() => { if (user) fetchIncome(); }, [user, filterMes, filterAno]);
+
+  useEffect(() => {
+    if (user) fetchAccounts();
+  }, [user]);
+
+  const fetchAccounts = async () => {
+    const { data } = await supabase.from("accounts").select("id, nome, banco, saldo_inicial").eq("user_id", user!.id);
+    if (data) setAccounts(data);
+  };
 
   const fetchIncome = async () => {
     setLoading(true);
@@ -60,6 +80,16 @@ export default function Receitas() {
     const valor = parseFloat(form.valor.replace(",","."));
     if (isNaN(valor)||valor<=0) { toast({ title:"Valor inválido", variant:"destructive" }); return; }
 
+    // If category is "Investimentos" and not editing, show investment modal
+    if (form.categoria === "Investimentos" && !editingId) {
+      setPendingInvestment({ titulo: form.titulo, valor, data: form.data });
+      setContaOrigemId("");
+      setContaDestinoId("");
+      setDialogOpen(false);
+      setInvestModalOpen(true);
+      return;
+    }
+
     const payload = { user_id: user!.id, titulo: form.titulo, valor, categoria: form.categoria, data: form.data };
 
     if (editingId) {
@@ -72,6 +102,51 @@ export default function Receitas() {
       toast({ title:"Receita criada!" });
     }
     setDialogOpen(false); setEditingId(null); resetForm(); fetchIncome();
+  };
+
+  const handleConfirmInvestment = async () => {
+    if (!pendingInvestment) return;
+    if (!contaOrigemId) { toast({ title: "Selecione a conta de origem", variant: "destructive" }); return; }
+    if (!contaDestinoId) { toast({ title: "Selecione a conta de destino", variant: "destructive" }); return; }
+    if (contaOrigemId === contaDestinoId) { toast({ title: "Conta de origem e destino devem ser diferentes", variant: "destructive" }); return; }
+
+    const origem = accounts.find(a => a.id === contaOrigemId);
+    if (origem && origem.saldo_inicial < pendingInvestment.valor) {
+      toast({ title: "Saldo insuficiente na conta de origem", variant: "destructive" });
+      return;
+    }
+
+    // Deduct from source account
+    const { error: errOrigem } = await supabase.from("accounts")
+      .update({ saldo_inicial: (origem!.saldo_inicial - pendingInvestment.valor) })
+      .eq("id", contaOrigemId);
+    if (errOrigem) { toast({ title: "Erro ao debitar conta de origem", variant: "destructive" }); return; }
+
+    // Add to destination account
+    const destino = accounts.find(a => a.id === contaDestinoId);
+    const { error: errDestino } = await supabase.from("accounts")
+      .update({ saldo_inicial: (destino!.saldo_inicial + pendingInvestment.valor) })
+      .eq("id", contaDestinoId);
+    if (errDestino) { toast({ title: "Erro ao creditar conta de destino", variant: "destructive" }); return; }
+
+    // Sync goals linked to destination account
+    await supabase.from("goals")
+      .update({ valor_atual: destino!.saldo_inicial + pendingInvestment.valor })
+      .eq("conta_id", contaDestinoId)
+      .eq("user_id", user!.id);
+
+    // Also sync goals linked to source account
+    await supabase.from("goals")
+      .update({ valor_atual: origem!.saldo_inicial - pendingInvestment.valor })
+      .eq("conta_id", contaOrigemId)
+      .eq("user_id", user!.id);
+
+    toast({ title: `Investimento de ${formatCurrency(pendingInvestment.valor)} transferido para ${destino!.nome}` });
+
+    setInvestModalOpen(false);
+    setPendingInvestment(null);
+    resetForm();
+    fetchAccounts();
   };
 
   const handleDelete = async (id: string) => {
@@ -117,6 +192,12 @@ export default function Receitas() {
                   <SelectContent>{INCOME_CATEGORIES.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
+              {form.categoria === "Investimentos" && !editingId && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                  Investimentos são tratados como transferência entre contas
+                </p>
+              )}
               <div className="flex gap-3 pt-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={()=>setDialogOpen(false)}>Cancelar</Button>
                 <Button type="submit" className="flex-1 gradient-primary border-0">Salvar</Button>
@@ -125,6 +206,52 @@ export default function Receitas() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Investment destination modal */}
+      <Dialog open={investModalOpen} onOpenChange={(open) => { setInvestModalOpen(open); if (!open) setPendingInvestment(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="w-5 h-5" /> Definir destino do investimento
+            </DialogTitle>
+            <DialogDescription>
+              Selecione a conta de origem e a conta ou caixinha que receberá o valor de {pendingInvestment ? formatCurrency(pendingInvestment.valor) : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-2">
+              <Label>Conta de origem</Label>
+              <Select value={contaOrigemId} onValueChange={setContaOrigemId}>
+                <SelectTrigger><SelectValue placeholder="Selecione a conta de origem" /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Conta de destino</Label>
+              <Select value={contaDestinoId} onValueChange={setContaDestinoId}>
+                <SelectTrigger><SelectValue placeholder="Selecione a conta de destino" /></SelectTrigger>
+                <SelectContent>
+                  {accounts.filter(a => a.id !== contaOrigemId).map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.nome} ({a.banco}) — {formatCurrency(a.saldo_inicial)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => { setInvestModalOpen(false); setPendingInvestment(null); }}>Cancelar</Button>
+              <Button type="button" className="flex-1 gradient-primary border-0" onClick={handleConfirmInvestment}>Confirmar e Salvar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card className="shadow-card">
         <CardContent className="pt-4">
