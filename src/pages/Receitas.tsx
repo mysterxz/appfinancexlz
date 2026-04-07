@@ -106,8 +106,10 @@ export default function Receitas() {
 
     // If category is "Investimentos" and not editing, show investment modal
     if (form.categoria === "Investimentos" && !editingId) {
+      if (valor > saldoDisponivel) {
+        toast({ title: "Valor maior que o saldo disponível", variant: "destructive" }); return;
+      }
       setPendingInvestment({ titulo: form.titulo, valor, data: form.data });
-      setContaOrigemId("");
       setContaDestinoId("");
       setDialogOpen(false);
       setInvestModalOpen(true);
