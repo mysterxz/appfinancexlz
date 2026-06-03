@@ -33,8 +33,9 @@ export default function Despesas() {
   const [form, setForm] = useState({
     titulo: "", valor: "", categoria: "Alimentação",
     data: new Date().toISOString().split("T")[0],
-    parcelado: false, parcelas: "1",
+    parcelado: false, parcelas: "1", parcela_inicial: "1",
   });
+
 
   const meses = [
     "Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"
@@ -63,7 +64,7 @@ export default function Despesas() {
 
   const resetForm = () => setForm({
     titulo: "", valor: "", categoria: "Alimentação",
-    data: new Date().toISOString().split("T")[0], parcelado: false, parcelas: "1"
+    data: new Date().toISOString().split("T")[0], parcelado: false, parcelas: "1", parcela_inicial: "1"
   });
 
   const openEdit = (expense: Expense) => {
@@ -71,10 +72,12 @@ export default function Despesas() {
     setForm({
       titulo: expense.titulo, valor: String(expense.valor),
       categoria: expense.categoria, data: expense.data,
-      parcelado: expense.parcelado, parcelas: String(expense.parcelas)
+      parcelado: expense.parcelado, parcelas: String(expense.parcelas),
+      parcela_inicial: String(expense.parcela_atual || 1),
     });
     setDialogOpen(true);
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,13 +94,14 @@ export default function Despesas() {
       toast({ title: "Despesa atualizada!" });
     } else {
       const parcelas = form.parcelado ? parseInt(form.parcelas) : 1;
+      const parcelaInicial = form.parcelado ? Math.min(Math.max(parseInt(form.parcela_inicial) || 1, 1), parcelas) : 1;
       const grupoId = form.parcelado ? crypto.randomUUID() : null;
       const valorParcela = valor / parcelas;
       const inserts = [];
 
-      for (let i = 0; i < parcelas; i++) {
+      for (let i = parcelaInicial - 1; i < parcelas; i++) {
         const dataObj = new Date(form.data + "T00:00:00");
-        dataObj.setMonth(dataObj.getMonth() + i);
+        dataObj.setMonth(dataObj.getMonth() + (i - (parcelaInicial - 1)));
         inserts.push({
           user_id: user!.id, titulo: form.parcelado ? `${form.titulo} (${i+1}/${parcelas})` : form.titulo,
           valor: valorParcela, categoria: form.categoria,
@@ -109,7 +113,8 @@ export default function Despesas() {
 
       const { error } = await supabase.from("expenses").insert(inserts);
       if (error) { toast({ title: "Erro ao criar despesa", variant: "destructive" }); return; }
-      toast({ title: form.parcelado ? `${parcelas} parcelas criadas!` : "Despesa criada!" });
+      toast({ title: form.parcelado ? `${inserts.length} parcela(s) criada(s) (${parcelaInicial}/${parcelas} a ${parcelas}/${parcelas})` : "Despesa criada!" });
+
     }
 
     setDialogOpen(false);
@@ -173,15 +178,33 @@ export default function Despesas() {
                     <Label>Parcelado</Label>
                   </div>
                   {form.parcelado && (
-                    <div className="space-y-2">
-                      <Label>Número de parcelas</Label>
-                      <Select value={form.parcelas} onValueChange={v => setForm(f => ({ ...f, parcelas: v }))}>
-                        <SelectTrigger><SelectValue placeholder="Selecione o número de parcelas" /></SelectTrigger>
-
-                        <SelectContent>{[2,3,4,5,6,9,10,12,18,24,36].map(n => <SelectItem key={n} value={String(n)}>{n}x de {formatCurrency(parseFloat(form.valor.replace(",",".") || "0") / n)}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <Label>Número de parcelas</Label>
+                        <Select value={form.parcelas} onValueChange={v => setForm(f => ({ ...f, parcelas: v, parcela_inicial: parseInt(f.parcela_inicial) > parseInt(v) ? "1" : f.parcela_inicial }))}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o número de parcelas" /></SelectTrigger>
+                          <SelectContent>{[2,3,4,5,6,9,10,12,18,24,36].map(n => <SelectItem key={n} value={String(n)}>{n}x de {formatCurrency(parseFloat(form.valor.replace(",",".") || "0") / n)}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Parcela em andamento</Label>
+                        <Select value={form.parcela_inicial} onValueChange={v => setForm(f => ({ ...f, parcela_inicial: v }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: parseInt(form.parcelas) || 1 }, (_, i) => i + 1).map(n => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n}ª parcela {n === 1 ? "(começar do início)" : `(restam ${(parseInt(form.parcelas) || 1) - n + 1})`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Selecione em qual parcela você está. Só serão criadas as parcelas restantes a partir da data informada.
+                        </p>
+                      </div>
+                    </>
                   )}
+
                 </div>
               )}
               <div className="flex gap-3 pt-2">
