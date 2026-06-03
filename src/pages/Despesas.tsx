@@ -64,7 +64,7 @@ export default function Despesas() {
 
   const resetForm = () => setForm({
     titulo: "", valor: "", categoria: "Alimentação",
-    data: new Date().toISOString().split("T")[0], parcelado: false, parcelas: "1"
+    data: new Date().toISOString().split("T")[0], parcelado: false, parcelas: "1", parcela_inicial: "1"
   });
 
   const openEdit = (expense: Expense) => {
@@ -72,10 +72,12 @@ export default function Despesas() {
     setForm({
       titulo: expense.titulo, valor: String(expense.valor),
       categoria: expense.categoria, data: expense.data,
-      parcelado: expense.parcelado, parcelas: String(expense.parcelas)
+      parcelado: expense.parcelado, parcelas: String(expense.parcelas),
+      parcela_inicial: String(expense.parcela_atual || 1),
     });
     setDialogOpen(true);
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
