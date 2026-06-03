@@ -178,15 +178,33 @@ export default function Despesas() {
                     <Label>Parcelado</Label>
                   </div>
                   {form.parcelado && (
-                    <div className="space-y-2">
-                      <Label>Número de parcelas</Label>
-                      <Select value={form.parcelas} onValueChange={v => setForm(f => ({ ...f, parcelas: v }))}>
-                        <SelectTrigger><SelectValue placeholder="Selecione o número de parcelas" /></SelectTrigger>
-
-                        <SelectContent>{[2,3,4,5,6,9,10,12,18,24,36].map(n => <SelectItem key={n} value={String(n)}>{n}x de {formatCurrency(parseFloat(form.valor.replace(",",".") || "0") / n)}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <Label>Número de parcelas</Label>
+                        <Select value={form.parcelas} onValueChange={v => setForm(f => ({ ...f, parcelas: v, parcela_inicial: parseInt(f.parcela_inicial) > parseInt(v) ? "1" : f.parcela_inicial }))}>
+                          <SelectTrigger><SelectValue placeholder="Selecione o número de parcelas" /></SelectTrigger>
+                          <SelectContent>{[2,3,4,5,6,9,10,12,18,24,36].map(n => <SelectItem key={n} value={String(n)}>{n}x de {formatCurrency(parseFloat(form.valor.replace(",",".") || "0") / n)}</SelectItem>)}</SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Parcela em andamento</Label>
+                        <Select value={form.parcela_inicial} onValueChange={v => setForm(f => ({ ...f, parcela_inicial: v }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: parseInt(form.parcelas) || 1 }, (_, i) => i + 1).map(n => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n}ª parcela {n === 1 ? "(começar do início)" : `(restam ${(parseInt(form.parcelas) || 1) - n + 1})`}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Selecione em qual parcela você está. Só serão criadas as parcelas restantes a partir da data informada.
+                        </p>
+                      </div>
+                    </>
                   )}
+
                 </div>
               )}
               <div className="flex gap-3 pt-2">
