@@ -169,7 +169,7 @@ export default function Despesas() {
               {!editingId && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <Switch checked={form.parcelado} onCheckedChange={v => setForm(f => ({ ...f, parcelado: v }))} />
+                    <Switch checked={form.parcelado} onCheckedChange={v => setForm(f => ({ ...f, parcelado: v, parcelas: v && (f.parcelas === "1" || !f.parcelas) ? "2" : f.parcelas }))} />
                     <Label>Parcelado</Label>
                   </div>
                   {form.parcelado && (
