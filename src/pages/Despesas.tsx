@@ -36,6 +36,41 @@ export default function Despesas() {
     parcelado: false, parcelas: "1", parcela_inicial: "1",
   });
 
+  const [parcelamentosExistentes, setParcelamentosExistentes] = useState<Array<{
+    grupo_id: string; titulo: string; categoria: string; valor_parcela: number;
+    total_parcelas: number; ultima_parcela: number; proxima_parcela: number;
+  }>>([]);
+
+  const fetchParcelamentosExistentes = async () => {
+    const { data } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("user_id", user!.id)
+      .eq("parcelado", true)
+      .not("grupo_parcelamento", "is", null);
+    const grupos: Record<string, any> = {};
+    (data || []).forEach((e: any) => {
+      const g = e.grupo_parcelamento;
+      if (!grupos[g]) {
+        grupos[g] = {
+          grupo_id: g,
+          titulo: (e.titulo || "").replace(/\s*\(\d+\/\d+\)\s*$/, ""),
+          categoria: e.categoria,
+          valor_parcela: Number(e.valor),
+          total_parcelas: e.parcelas,
+          ultima_parcela: e.parcela_atual,
+        };
+      } else if (e.parcela_atual > grupos[g].ultima_parcela) {
+        grupos[g].ultima_parcela = e.parcela_atual;
+      }
+    });
+    const lista = Object.values(grupos)
+      .map((g: any) => ({ ...g, proxima_parcela: g.ultima_parcela + 1 }))
+      .filter((g: any) => g.proxima_parcela <= g.total_parcelas);
+    setParcelamentosExistentes(lista as any);
+  };
+
+
 
   const meses = [
     "Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"
