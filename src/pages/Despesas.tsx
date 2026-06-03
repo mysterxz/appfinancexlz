@@ -174,7 +174,7 @@ export default function Despesas() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Despesas</h1>
           <p className="text-sm text-muted-foreground">Gerencie suas despesas</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { resetForm(); setEditingId(null); } }}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) fetchParcelamentosExistentes(); if (!open) { resetForm(); setEditingId(null); } }}>
           <DialogTrigger asChild>
             <Button className="gradient-primary border-0 gap-2">
               <Plus className="w-4 h-4" /> Nova Despesa
