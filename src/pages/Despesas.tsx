@@ -94,13 +94,14 @@ export default function Despesas() {
       toast({ title: "Despesa atualizada!" });
     } else {
       const parcelas = form.parcelado ? parseInt(form.parcelas) : 1;
+      const parcelaInicial = form.parcelado ? Math.min(Math.max(parseInt(form.parcela_inicial) || 1, 1), parcelas) : 1;
       const grupoId = form.parcelado ? crypto.randomUUID() : null;
       const valorParcela = valor / parcelas;
       const inserts = [];
 
-      for (let i = 0; i < parcelas; i++) {
+      for (let i = parcelaInicial - 1; i < parcelas; i++) {
         const dataObj = new Date(form.data + "T00:00:00");
-        dataObj.setMonth(dataObj.getMonth() + i);
+        dataObj.setMonth(dataObj.getMonth() + (i - (parcelaInicial - 1)));
         inserts.push({
           user_id: user!.id, titulo: form.parcelado ? `${form.titulo} (${i+1}/${parcelas})` : form.titulo,
           valor: valorParcela, categoria: form.categoria,
@@ -112,7 +113,8 @@ export default function Despesas() {
 
       const { error } = await supabase.from("expenses").insert(inserts);
       if (error) { toast({ title: "Erro ao criar despesa", variant: "destructive" }); return; }
-      toast({ title: form.parcelado ? `${parcelas} parcelas criadas!` : "Despesa criada!" });
+      toast({ title: form.parcelado ? `${inserts.length} parcela(s) criada(s) (${parcelaInicial}/${parcelas} a ${parcelas}/${parcelas})` : "Despesa criada!" });
+
     }
 
     setDialogOpen(false);
