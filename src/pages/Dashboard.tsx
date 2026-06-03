@@ -53,17 +53,25 @@ export default function Dashboard() {
   }, [user]);
 
   const getSaldoInicialDoMes = async (userId: string, mes: number, ano: number): Promise<number> => {
-    // Get previous month's saldo_final
-    const prevMonth = mes === 1 ? 12 : mes - 1;
-    const prevYear = mes === 1 ? ano - 1 : ano;
-    const { data } = await supabase
-      .from("saldo_mensal")
-      .select("saldo_final")
-      .eq("user_id", userId)
-      .eq("mes", prevMonth)
-      .eq("ano", prevYear)
-      .maybeSingle();
-    return data ? Number(data.saldo_final) : 0;
+    // Calcula dinamicamente: todas as receitas - todas as despesas anteriores ao mês,
+    // descontando valores já guardados em caixinhas (que saíram do saldo disponível).
+    const startCurrent = `${ano}-${String(mes).padStart(2, "0")}-01`;
+
+    const [{ data: incomeData }, { data: expensesData }, { data: saldoData }] = await Promise.all([
+      supabase.from("income").select("valor").eq("user_id", userId).lt("data", startCurrent),
+      supabase.from("expenses").select("valor").eq("user_id", userId).lt("data", startCurrent),
+      supabase.from("saldo_mensal")
+        .select("valor_guardado, mes, ano")
+        .eq("user_id", userId),
+    ]);
+
+    const totalReceitasAnteriores = (incomeData || []).reduce((s, r) => s + Number(r.valor), 0);
+    const totalDespesasAnteriores = (expensesData || []).reduce((s, e) => s + Number(e.valor), 0);
+    const totalGuardadoAnterior = (saldoData || [])
+      .filter(s => s.ano < ano || (s.ano === ano && s.mes < mes))
+      .reduce((s, r) => s + Number(r.valor_guardado || 0), 0);
+
+    return totalReceitasAnteriores - totalDespesasAnteriores - totalGuardadoAnterior;
   };
 
   const fetchDashboard = async () => {
