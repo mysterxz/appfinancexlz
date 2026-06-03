@@ -169,14 +169,15 @@ export default function Despesas() {
               {!editingId && (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <Switch checked={form.parcelado} onCheckedChange={v => setForm(f => ({ ...f, parcelado: v }))} />
+                    <Switch checked={form.parcelado} onCheckedChange={v => setForm(f => ({ ...f, parcelado: v, parcelas: v && (f.parcelas === "1" || !f.parcelas) ? "2" : f.parcelas }))} />
                     <Label>Parcelado</Label>
                   </div>
                   {form.parcelado && (
                     <div className="space-y-2">
                       <Label>Número de parcelas</Label>
                       <Select value={form.parcelas} onValueChange={v => setForm(f => ({ ...f, parcelas: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Selecione o número de parcelas" /></SelectTrigger>
+
                         <SelectContent>{[2,3,4,5,6,9,10,12,18,24,36].map(n => <SelectItem key={n} value={String(n)}>{n}x de {formatCurrency(parseFloat(form.valor.replace(",",".") || "0") / n)}</SelectItem>)}</SelectContent>
                       </Select>
                     </div>
