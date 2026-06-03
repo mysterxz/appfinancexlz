@@ -212,7 +212,37 @@ export default function Despesas() {
                     <Switch checked={form.parcelado} onCheckedChange={v => setForm(f => ({ ...f, parcelado: v, parcelas: v && (f.parcelas === "1" || !f.parcelas) ? "2" : f.parcelas }))} />
                     <Label>Parcelado</Label>
                   </div>
+                  {form.parcelado && parcelamentosExistentes.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Continuar parcelamento existente <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
+                      <Select
+                        onValueChange={(grupoId) => {
+                          const p = parcelamentosExistentes.find(x => x.grupo_id === grupoId);
+                          if (!p) return;
+                          setForm(f => ({
+                            ...f,
+                            titulo: p.titulo,
+                            categoria: p.categoria,
+                            valor: String((p.valor_parcela * p.total_parcelas).toFixed(2)),
+                            parcelas: String(p.total_parcelas),
+                            parcela_inicial: String(p.proxima_parcela),
+                          }));
+                          toast({ title: `Pré-preenchido a partir da ${p.proxima_parcela}ª parcela` });
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Selecione um item já parcelado..." /></SelectTrigger>
+                        <SelectContent>
+                          {parcelamentosExistentes.map(p => (
+                            <SelectItem key={p.grupo_id} value={p.grupo_id}>
+                              {p.titulo} — próx: {p.proxima_parcela}/{p.total_parcelas} ({formatCurrency(p.valor_parcela)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {form.parcelado && (
+
                     <>
                       <div className="space-y-2">
                         <Label>Número de parcelas</Label>
