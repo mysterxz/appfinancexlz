@@ -33,8 +33,9 @@ export default function Despesas() {
   const [form, setForm] = useState({
     titulo: "", valor: "", categoria: "Alimentação",
     data: new Date().toISOString().split("T")[0],
-    parcelado: false, parcelas: "1",
+    parcelado: false, parcelas: "1", parcela_inicial: "1",
   });
+
 
   const meses = [
     "Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"
