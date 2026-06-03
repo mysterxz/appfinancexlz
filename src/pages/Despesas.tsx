@@ -36,6 +36,41 @@ export default function Despesas() {
     parcelado: false, parcelas: "1", parcela_inicial: "1",
   });
 
+  const [parcelamentosExistentes, setParcelamentosExistentes] = useState<Array<{
+    grupo_id: string; titulo: string; categoria: string; valor_parcela: number;
+    total_parcelas: number; ultima_parcela: number; proxima_parcela: number;
+  }>>([]);
+
+  const fetchParcelamentosExistentes = async () => {
+    const { data } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("user_id", user!.id)
+      .eq("parcelado", true)
+      .not("grupo_parcelamento", "is", null);
+    const grupos: Record<string, any> = {};
+    (data || []).forEach((e: any) => {
+      const g = e.grupo_parcelamento;
+      if (!grupos[g]) {
+        grupos[g] = {
+          grupo_id: g,
+          titulo: (e.titulo || "").replace(/\s*\(\d+\/\d+\)\s*$/, ""),
+          categoria: e.categoria,
+          valor_parcela: Number(e.valor),
+          total_parcelas: e.parcelas,
+          ultima_parcela: e.parcela_atual,
+        };
+      } else if (e.parcela_atual > grupos[g].ultima_parcela) {
+        grupos[g].ultima_parcela = e.parcela_atual;
+      }
+    });
+    const lista = Object.values(grupos)
+      .map((g: any) => ({ ...g, proxima_parcela: g.ultima_parcela + 1 }))
+      .filter((g: any) => g.proxima_parcela <= g.total_parcelas);
+    setParcelamentosExistentes(lista as any);
+  };
+
+
 
   const meses = [
     "Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"
@@ -139,7 +174,7 @@ export default function Despesas() {
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Despesas</h1>
           <p className="text-sm text-muted-foreground">Gerencie suas despesas</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) { resetForm(); setEditingId(null); } }}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (open) fetchParcelamentosExistentes(); if (!open) { resetForm(); setEditingId(null); } }}>
           <DialogTrigger asChild>
             <Button className="gradient-primary border-0 gap-2">
               <Plus className="w-4 h-4" /> Nova Despesa
@@ -177,7 +212,37 @@ export default function Despesas() {
                     <Switch checked={form.parcelado} onCheckedChange={v => setForm(f => ({ ...f, parcelado: v, parcelas: v && (f.parcelas === "1" || !f.parcelas) ? "2" : f.parcelas }))} />
                     <Label>Parcelado</Label>
                   </div>
+                  {form.parcelado && parcelamentosExistentes.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Continuar parcelamento existente <span className="text-xs text-muted-foreground font-normal">(opcional)</span></Label>
+                      <Select
+                        onValueChange={(grupoId) => {
+                          const p = parcelamentosExistentes.find(x => x.grupo_id === grupoId);
+                          if (!p) return;
+                          setForm(f => ({
+                            ...f,
+                            titulo: p.titulo,
+                            categoria: p.categoria,
+                            valor: String((p.valor_parcela * p.total_parcelas).toFixed(2)),
+                            parcelas: String(p.total_parcelas),
+                            parcela_inicial: String(p.proxima_parcela),
+                          }));
+                          toast({ title: `Pré-preenchido a partir da ${p.proxima_parcela}ª parcela` });
+                        }}
+                      >
+                        <SelectTrigger><SelectValue placeholder="Selecione um item já parcelado..." /></SelectTrigger>
+                        <SelectContent>
+                          {parcelamentosExistentes.map(p => (
+                            <SelectItem key={p.grupo_id} value={p.grupo_id}>
+                              {p.titulo} — próx: {p.proxima_parcela}/{p.total_parcelas} ({formatCurrency(p.valor_parcela)})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {form.parcelado && (
+
                     <>
                       <div className="space-y-2">
                         <Label>Número de parcelas</Label>
